@@ -13,25 +13,25 @@
 # limitations under the License.
 
 import io
-from l3c import __version__
+from xenoverse import __version__
 from setuptools import setup, find_packages
 
 with io.open('README.md', 'r', encoding='utf-8') as fh:
     long_description = fh.read()
 
 setup(
-    name='l3c',
+    name='xenoverse',
     version=__version__,
     author='WorldEditors',
     author_email='',
-    description=('Benchmarks for Lifelong In-Context Learning'),
+    description=('Collection of xeno-world environments for meta-training of general-purpose learning agents (GLAs)'),
     long_description=long_description,
     long_description_content_type='text/markdown',
-    url='https://github.com/FutureAGI/L3C',
+    url='https://github.com/FutureAGI/xenoverse',
     license="Apache",
     packages=[package for package in find_packages()
-              if package.startswith('l3c')],
-    package_data={'l3c': [
+              if package.startswith('xenoverse')],
+    package_data={'xenoverse': [
         './mazeworld/envs/img/*',
         ]
     },
