@@ -57,8 +57,6 @@ class AnyMDPEnv(gym.Env):
 
         ### update inner state (dynamics)
         inner_deta = self.action_map(self._inner_state, action)
-        #print('inner_deta: ', inner_deta)
-        #print("inner_state: ", self._inner_state)
         next_inner_state = (self._inner_state + 
             inner_deta * self.action_weight + 
             self.transition_noise * random.normal(size=(self.ndim,)))
@@ -88,9 +86,7 @@ class AnyMDPEnv(gym.Env):
         self._state = self.observation_map(self._inner_state)
         oob = (numpy.abs(self._inner_state) > self.box_size)
         done = (self.steps >= self.max_steps or done or oob.any())
-
-        #print("observation：", self._state)
-
+ 
         if(done):
             self.need_reset = True
 

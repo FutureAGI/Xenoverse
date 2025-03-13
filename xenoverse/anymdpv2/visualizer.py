@@ -29,7 +29,14 @@ class AnyMDPv2Visualizer(AnyMDPEnv):
         return obs
     
     def step(self, action):
-        obs, reward, done, info = super().step(action)
+        result = super().step(action)
+        # 判断返回结果的长度来兼容旧版和新版 Gym
+        if len(result) == 5:
+            obs, reward, terminated, truncated, info = result
+            done = terminated or truncated
+        else:
+            obs, reward, done, info = result
+
         self.observation_records.append(numpy.copy(obs))
         self.inner_state_records.append(numpy.copy(self.inner_state))
         self.action_records.append(numpy.copy(action))
