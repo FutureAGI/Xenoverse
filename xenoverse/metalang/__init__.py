@@ -18,7 +18,7 @@ from xenoverse.metalang.metalangv2 import MetaLangV2
 from xenoverse.metalang.metalangv3 import MetaLMV3Env
 from xenoverse.metalang.task_sampler import TaskSamplerV1, TaskSamplerV2, TaskSamplerV3
 from xenoverse.metalang.generator import metalang_generator
-
+from xenoverse.metalang.generator_v3 import metalang_generator_v3
 register(
     id='meta-language-v1',
     entry_point='xenoverse.metalang:MetaLangV1',
