@@ -125,7 +125,200 @@ class RandomMLP(object):
     
     def __call__(self, *args, **kwds):
         return self.forward(*args, **kwds)
+
+class RandomRNN(object):
+    '''
+    A class for generating random MLPs with given parameters
+    '''
+    def __init__(self, n_inputs, n_hidden,
+                 activation='tanh',
+                 seed=None):
+        # Set the seed for the random number generator
+        if seed is None:
+            seed = pseudo_random_seed()
+        random.seed(seed)
+        
+        # Initialize weights and biases to random values
+        n_inner = n_inputs + n_hidden
+        self.wh, self.bh = weights_and_biases(n_inner, n_hidden, need_bias=True)
+        self.hidden_states = numpy.zeros(shape=[n_hidden])
+
+        self.reset()
+        self.act_func = actfunc(activation)
+
+    def reset(self):
+        self.hidden_states.fill(0.)
+
+    def restore(self):
+        self.hidden_states = self.cache_states.copy()
+
+    def cache(self):
+        self.cache_states = self.hidden_states.copy()
+
+    def forward(self, inputs):
+        outputs = inputs
+        n_hidden = numpy.concat([self.hidden_states, inputs], axis=0)
+        self.hidden_states = self.act_func(self.wh @ n_hidden + self.bh)
+        return self.hidden_states.copy()
+
+    def __call__(self, *args, **kwds):
+        return self.forward(*args, **kwds)
     
+def layer_norm(x, eps=1e-8):
+    mean = x.mean(axis=-1, keepdims=True)
+    std = x.std(axis=-1, keepdims=True)
+    normed = (x - mean) / (std + eps)
+    return normed
+
+def softmax_sampling(logits, temperature=1.0):
+    logits -= numpy.max(logits)
+    probs = numpy.exp(logits / temperature)
+    probs /= numpy.sum(probs, axis=-1, keepdims=True)
+    symbol = numpy.random.choice(numpy.arange(len(probs)), p=probs)
+    return int(symbol), - numpy.log(max(probs[symbol], 1.0e-10))
+
+def rnd_sampling(logits, temperature=1.0):
+    logits[1:] -= logits[1:] * (logits[1:] < -1.0e+5).astype(numpy.float32)
+    probs = numpy.exp(logits)
+    probs /= numpy.sum(probs, axis=-1, keepdims=True)
+    symbol = numpy.random.choice(numpy.arange(len(probs)), p=probs)
+
+    return int(symbol), - numpy.log(max(probs[symbol], 1.0e-10))
+
+def high_sampling(logits, temperature=1.0):
+    logits -= numpy.max(logits)
+    probs = numpy.exp(logits / temperature)
+    probs /= numpy.sum(probs, axis=-1, keepdims=True)
+    symbol = numpy.random.choice(numpy.arange(len(probs)), p=probs)
+    if(symbol != 0):
+        symbol = numpy.argmax(probs)
+
+    return int(symbol), - numpy.log(max(probs[symbol], 1.0e-10))
+    
+class RandomLM(object):
+    '''
+    A class for generating random GRUs with given parameters
+    '''
+    def __init__(self, n_vocab, n_emb, n_hidden, 
+                 function_token_number=10,
+                 seed=None):
+        # Set the seed for the random number generator
+        self.n_vocab = n_vocab
+        self.function_token_number = function_token_number
+        self.enc = RandomMLP(n_vocab, n_emb, seed=seed)
+        self.dec = RandomMLP(n_hidden, n_vocab, seed=seed)
+        self.rnn = RandomRNN(n_emb, n_hidden, seed=seed)
+        self.stop_inc = 0.02
+        self.echo_punish = 0.05
+
+    def reset(self):
+        self.rnn.reset()
+        self.stop_bias = -1.0e+6 # Stop first token to be 0
+        self.echo_bias = numpy.zeros((self.n_vocab,))
+    
+    def cache(self):
+        self.rnn.cache()
+        self.stop_bias = -1.0e+6 # Stop first token to be 0
+        self.echo_bias.fill(0.0)
+
+    def restore(self):
+        self.rnn.restore()
+        self.stop_bias = -1.0e+6 # Stop first token to be 0
+        self.echo_bias.fill(0.0)
+
+    def forward(self, inputs):
+        emb = numpy.zeros(shape=[self.n_vocab])
+        emb[inputs] = 1
+
+        encodings = layer_norm(self.enc(emb))
+        hiddens = self.rnn(encodings)
+        decodings = self.dec(hiddens)
+
+        logits = decodings + self.echo_bias
+        logits[0] += self.stop_bias
+        logits[1:self.function_token_number] = -1.0e+6
+        if(self.stop_bias < 0):
+            self.stop_bias = self.stop_inc  # avoid stop from the beginning
+        else:
+            self.stop_bias += self.stop_inc # increase probability of stop token
+        self.echo_bias[inputs] -= self.echo_punish
+
+        return logits
+
+    def generate_one_step(self, inputs, temperature=1, decode_type='softmax'):
+        logits = self.forward(inputs)
+        if(decode_type == 'softmax'):
+            tok = softmax_sampling(logits, temperature=temperature)
+        elif(decode_type == 'rnd'):
+            tok = rnd_sampling(logits, temperature=temperature)
+        elif(decode_type == 'greedy'):
+            tok = high_sampling(logits, temperature=temperature)
+        else:
+            raise NotImplementedError(f"Unknown sampling method: {decode_type}")
+        
+        return tok
+        
+    def generate_sequence(self, inputs, T_s=1.0, T_c=1.0, decode_type='softmax'):
+        output = []
+        ppls = []
+        done = False
+        T = T_s
+        step = 0
+        while not done:
+            next_token, ppl = self.generate_one_step(inputs, temperature=T, decode_type=decode_type)
+            ppls.append(ppl)
+            if(next_token == 0):
+                done=True
+            else:
+                output.append(next_token)
+                inputs = next_token
+            T = T_c
+            step += 1
+        return output, ppls
+    
+    def __call__(self, *args, **kwds):
+        return self.forward(*args, **kwds)
+
+    def generate_query(self):
+        self.reset()
+        query, ppls = self.generate_sequence(0, decode_type='softmax', T_s=10.0, T_c=1.0)
+        return query
+    
+    def generate_answer_greedy(self):
+        self.cache()
+        ans, ppls = self.generate_sequence(0, decode_type='greedy')
+        self.restore()
+        return ans, numpy.mean(ppls)
+    
+    def generate_answer_softmax(self, T=1.0):
+        self.cache()
+        ans, ppls = self.generate_sequence(0, decode_type='softmax', T_s=T, T_c=T)
+        self.restore()
+        return ans, numpy.mean(ppls)
+    
+    def generate_answer_low(self):
+        self.cache()
+        ans, ppls = self.generate_sequence(0, decode_type='rnd')
+        self.restore()
+        return ans, numpy.mean(ppls)
+
+    def label_answer(self, ans):
+        self.cache()
+        ppls = []
+        label_toks = []
+        prev_token = 0
+
+        for i,tok in enumerate(ans+[0]):  # consider also the stop token
+            logits = self.forward(prev_token)
+            probs = numpy.exp(logits)
+            probs /= numpy.sum(probs)
+            label_toks.append(int(numpy.argmax(probs)))
+            ppl = - numpy.log(max(1.0e-10, probs[tok]))
+            ppls.append(ppl)
+            prev_token = tok
+        self.restore()
+        return label_toks, numpy.mean(ppls)
+
 class RandomFourier(object):
     def __init__(self,
                  ndim,

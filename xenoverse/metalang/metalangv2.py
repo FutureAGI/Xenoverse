@@ -109,4 +109,3 @@ class MetaLangV2(gym.Env):
         else:
             raise Exception("Please set task before using data generator")
         return tokens
-

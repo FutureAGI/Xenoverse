@@ -18,7 +18,7 @@ import numpy
 import gym
 from numpy import random
 from xenoverse.utils import pseudo_random_seed
-
+from xenoverse.utils import RandomLM
 
 def TaskSamplerV2(seed=None,
                 n_emb=16,
@@ -72,3 +72,15 @@ def TaskSamplerV1(seed=None,
             'error_ratio': error_ratio,
             'n_gram': n_gram
         }
+
+def TaskSamplerV3(vocab_size=32,
+                 function_token_number=6,
+                 embedding_size=16,
+                 hidden_size=32,
+                 seed=None):
+    return {"vocabulary": vocab_size,
+            "embedding": embedding_size,
+            "hidden": hidden_size,
+            "function_token_number": function_token_number,
+            "lm": RandomLM(n_vocab=vocab_size, 
+                    n_emb=embedding_size, n_hidden=hidden_size, seed=seed)}
