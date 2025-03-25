@@ -2,7 +2,7 @@
 
 Scalable simulation environments for HVAC in IDC, with casual models of second law of thermodynamics
 
-![AnyHVACVisualizer](https://github.com/FutureAGI/DataPack/blob/main/demo/anymdp/AnyHVACVisualizer.gif) 
+![AnyHVACVisualizer](https://github.com/FutureAGI/DataPack/blob/main/demo/anyhvac/hvac_video.gif) 
 
 # Install
 
@@ -31,7 +31,10 @@ import xenoverse.anyhvac
 env = gym.make("anyhvac-visualizer-v0", # use `anyhvac-v0` for non-visualizer version
                 max_steps=86400, # max time in seconds
                 target_temperature=28, # target temperature in Celsius, highest reward at this position
-                upper_limit=80）
+                upper_limit=80, # upper limit of temperature in Celsius, failure at this position
+                iter_per_step=600） # number of iterations per step, actual time elapsed=iter_per_step * 0.2
+
+
 ```
 
 ## Sampling an HVAC control task
