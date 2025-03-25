@@ -23,7 +23,7 @@ register(
     kwargs={"max_steps": 86400,
             "target_temperature": 28,
             "upper_limit": 80,
-            "iter_per_step": 30},
+            "iter_per_step": 600},
 )
 
 register(
@@ -32,5 +32,5 @@ register(
     kwargs={"max_steps": 86400,
             "target_temperature": 28,
             "upper_limit": 80,
-            "iter_per_step": 30},
+            "iter_per_step": 600},
 )
