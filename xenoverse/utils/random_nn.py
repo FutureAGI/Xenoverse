@@ -326,13 +326,13 @@ class RandomFourier(object):
                  max_item=5,
                  max_steps=1000,
                  box_size=2):
-        n_items = random.randint(0, max_item + 1)
+        n_items = random.randint(1, max_item + 1)
         self.coeffs = [(0, random.normal(size=(ndim, 2)) * random.exponential(scale=box_size / numpy.sqrt(n_items), size=(ndim, 2)))]
         self.max_steps = max_steps
         for j in range(n_items):
             # Sample a cos nx + b cos ny
             order = random.randint(1, max_order + 1) + random.normal(scale=1.0)
-            factor = random.normal(size=(ndim, 2)) * random.exponential(scale=1.0, size=(ndim, 2))
+            factor = random.normal(size=(ndim, 2)) * random.exponential(scale=box_size / numpy.sqrt(n_items), size=(ndim, 2))
             self.coeffs.append((order, factor))
 
     def __call__(self, t):

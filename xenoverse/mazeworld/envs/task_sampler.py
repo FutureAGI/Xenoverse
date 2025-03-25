@@ -9,13 +9,14 @@ from collections import namedtuple
 from numpy import random as npyrnd
 from numpy.linalg import norm
 from copy import deepcopy
-from xenoverse.mazeworld.envs.grid_ops import genmaze_by_primwall
+from xenoverse.utils import genmaze_by_primwall
 from xenoverse.utils import pseudo_random_seed
 from xenoverse.mazeworld.envs.dynamics import PI
 
 
 def gentext(cell_walls, textlib_walls, textlib_grounds, textlib_ceilings):
     n = cell_walls.shape[0]
+    # 随机生成cell_walls的纹理索引
     cell_texts = numpy.random.randint(0, len(textlib_walls), size=cell_walls.shape)
 
     #Paint the texture of passways to ground textures 

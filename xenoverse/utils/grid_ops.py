@@ -1,7 +1,7 @@
 import numpy
 from numpy import random
 from attr import attrs, attrib
-from xenoverse.mazeworld.envs.utils import conv2d_numpy
+from .tools import conv2d_numpy
 
 """
 Generating Topology For A Maze
