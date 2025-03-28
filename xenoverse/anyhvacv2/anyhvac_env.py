@@ -89,6 +89,7 @@ class HVACEnv(gym.Env):
         static_chtc_array = numpy.copy(self.convection_coeffs)
         static_heat = numpy.zeros((self.n_width, self.n_length))
         equip_heat = []
+        c_energys = np.zeros(len(self.coolers), dtype=np.float32)
         energy = 0
         for i, equipment in enumerate(self.equipments):
             eff = equipment(self.t)
@@ -109,6 +110,7 @@ class HVACEnv(gym.Env):
                 net_heat += eff["delta_energy"]
                 net_chtc += eff["delta_chtc"]
                 energy += eff["power"] * dt
+                c_energys[i] += eff["power"] * dt
             state_exp = numpy.full((self.n_width + 2, self.n_length + 2), self.ambient_temp)
             state_exp[1:-1, 1:-1] = self.state
             horizontal = - (state_exp[1:, 1:-1] - state_exp[:-1, 1:-1]) * net_chtc[:, :-1, 0] * self.csa
@@ -120,8 +122,8 @@ class HVACEnv(gym.Env):
             self.state += (net_heat + net_in) / self.heat_capacity * dt
 
             self.t += dt
-        return equip_heat, net_chtc, energy
-
+        c_energys = c_energys/ (10000 * self.iter_per_step * self.sec_per_iter)
+        return equip_heat, net_chtc, energy, c_energys
     def reward(self, observation, action, energy):  # v1 juedges the temperature in all the cells
         obs_arr = numpy.array(observation)
 
@@ -146,7 +148,7 @@ class HVACEnv(gym.Env):
     def step(self, action):
         self.episode_step += 1
         action = numpy.clip(action, 0, 1)
-        equip_heat, chtc_array, energy = self.update_states(action, dt=self.sec_per_iter, n=self.iter_per_step)
+        equip_heat, chtc_array, energy, c_energys = self.update_states(action, dt=self.sec_per_iter, n=self.iter_per_step)
         observation = self.get_observation()
         reward, done = self.reward(observation, action, energy)
         done = done or (self.episode_step >= self.max_steps)
@@ -157,6 +159,7 @@ class HVACEnv(gym.Env):
                 "heat_power": numpy.copy(equip_heat),
                 "chtc_array": numpy.copy(chtc_array),
                 "energy": energy,
+                "c_energys": c_energys,
                 "area_divider": self.area_divider}
         if self.verbose:
             print(f"step:{self.episode_step},reward:{reward}, done:{done},\nobservation:{observation}")

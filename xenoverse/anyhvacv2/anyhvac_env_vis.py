@@ -17,7 +17,7 @@ class HVACEnvVisible(HVACEnv):
     def step(self, actions):
         actions = numpy.clip(actions, 0, 1)
         observation, reward, done, info = super().step(actions)
-        keydone, _ = self.render_update(info["heat_power"], actions, info["chtc_array"])
+        keydone, _ = self.render_update(info["heat_power"], info['c_energys'], info["chtc_array"])
         return observation, reward, (done or keydone), info
 
     def render_init(self, render_size=640):
