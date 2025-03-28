@@ -34,6 +34,10 @@ class BaseNodes(object):
         self.cloc = self.loc / self.cell_size
         # 取整
         self.nloc = self.cloc.astype(int)
+        self.area = None
+
+    def set_area(self, aw, al):
+        self.area = (aw,al)
 
     def __repr__(self):
         return f"{type(self).__name__}({self.loc[0]:.1f},{self.loc[1]:.1f})\n"
@@ -246,26 +250,30 @@ class AreaDivider(object):
         print(f"Target matrix: {self.targets}")
 
     def get_target(self, node):  # 9 9
-        aw = 0
-        ay = 0
 
-        if node.nloc[0] > self.w_divs[-1]:
-            aw = len(self.w_divs)
+        if node.area is None:
+            aw = 0
+            al = 0
+
+            if node.nloc[0] > self.w_divs[-1]:
+                aw = len(self.w_divs)
+            else:
+                for i, div in enumerate(self.w_divs):  # 2 4 6 8
+                    aw = i
+                    if node.nloc[0] < div:
+                        break
+
+            if node.nloc[1] > self.l_divs[-1]:
+                al = len(self.l_divs)
+            else:
+                for i, div in enumerate(self.l_divs):
+                    al = i
+                    if node.nloc[1] < div:
+                        break
+            node.set_area(aw, al)
+            return aw, al, self.targets[aw, al]
         else:
-            for i, div in enumerate(self.w_divs):  # 2 4 6 8
-                aw = i
-                if node.nloc[0] < div:
-                    break
-
-        if node.nloc[1] > self.l_divs[-1]:
-            ay = len(self.l_divs)
-        else:
-            for i, div in enumerate(self.l_divs):
-                ay = i
-                if node.nloc[1] < div:
-                    break
-
-        return aw, ay, self.targets[aw, ay]
+            return node.area[0], node.area[1], self.targets[node.area[0], node.area[1]]
 
     def cal_max_temp_deviation(self, sensors, building_state):
         dev_matrix = np.full((self.targets.shape[0], self.targets.shape[1]), -999, dtype=float)
@@ -276,8 +284,8 @@ class AreaDivider(object):
         #         str_matrix[i].append(f"sensors:")
 
         for s in sensors:
-            aw, ay, target = self.get_target(s)
-            dev_matrix[aw, ay] = max(dev_matrix[aw, ay], s(building_state) - target)
+            aw, al, target = self.get_target(s)
+            dev_matrix[aw, al] = max(dev_matrix[aw, al], s(building_state) - target)
             # str_matrix[aw][ay] = str_matrix[aw][ay] + f",{s(building_state):.1f} "
 
         return dev_matrix[dev_matrix != -999]

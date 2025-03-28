@@ -15,7 +15,7 @@ class HVACEnv(gym.Env):
                  set_lower_bound=16,
                  set_upper_bound=32,
                  tolerance=1,
-                 ):
+                 verbose=False):
         self.action_space = gym.spaces.Box(low=0, high=1, shape=(1,), dtype=numpy.float32)
         self.observation_space = gym.spaces.Box(low=-273, high=273, shape=(1,), dtype=numpy.float32)
         self.max_steps = max_steps
@@ -33,6 +33,7 @@ class HVACEnv(gym.Env):
         self.upper_bound = set_upper_bound
         self.area_divider = None
         self.tolerance = tolerance
+        self.verbose = verbose
 
     def set_task(self, task):
         for key in task:
@@ -67,6 +68,7 @@ class HVACEnv(gym.Env):
         self.state = self.state + numpy.random.normal(0, 2.0, (self.n_width, self.n_length))
         self.t = 0
         self.last_action = numpy.zeros(self.action_space.shape[0])
+        self.episode_step = 0
 
         observation = self.get_observation()
 
@@ -142,11 +144,12 @@ class HVACEnv(gym.Env):
                 - (normalized_energy / len(self.coolers)) * self.energy_loss), False
 
     def step(self, action):
+        self.episode_step += 1
         action = numpy.clip(action, 0, 1)
         equip_heat, chtc_array, energy = self.update_states(action, dt=self.sec_per_iter, n=self.iter_per_step)
         observation = self.get_observation()
         reward, done = self.reward(observation, action, energy)
-        done = done or (self.t >= self.max_steps)
+        done = done or (self.episode_step >= self.max_steps)
         self.last_action = numpy.copy(action)
         info = {"topology": numpy.copy(self.topology),
                 "gt_temperature": numpy.copy(self.state),
@@ -155,4 +158,6 @@ class HVACEnv(gym.Env):
                 "chtc_array": numpy.copy(chtc_array),
                 "energy": energy,
                 "area_divider": self.area_divider}
+        if self.verbose:
+            print(f"step:{self.episode_step},reward:{reward}, done:{done},\nobservation:{observation}")
         return observation, reward, done, info

@@ -8,7 +8,10 @@ register(
     kwargs={"max_steps": 86400,
             "target_temperature": 28,
             "upper_limit": 80,
-            "iter_per_step": 600},
+            "iter_per_step": 600,
+            "set_lower_bound": 16,
+            "set_upper_bound": 32,
+            "tolerance": 1 },
 )
 
 register(
@@ -17,5 +20,8 @@ register(
     kwargs={"max_steps": 86400,
             "target_temperature": 28,
             "upper_limit": 80,
-            "iter_per_step": 600},
+            "iter_per_step": 600,
+            "set_lower_bound": 16,
+            "set_upper_bound": 32,
+            "tolerance": 1 },
 )
