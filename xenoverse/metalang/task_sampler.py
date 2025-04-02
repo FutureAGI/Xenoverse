@@ -73,14 +73,28 @@ def TaskSamplerV1(seed=None,
             'n_gram': n_gram
         }
 
+function_vocabulary = {'s':0,
+    'q':1,
+    'a':2,
+    'r1':3,
+    'r2':4,
+    'r3':5,
+    'r4':6,
+    'r5':7,
+    'r>':8,
+    'r=':9,
+    'r<':10}
+
 def TaskSamplerV3(vocab_size=32,
-                 function_token_number=6,
                  embedding_size=16,
                  hidden_size=32,
                  seed=None):
     return {"vocabulary": vocab_size,
             "embedding": embedding_size,
             "hidden": hidden_size,
-            "function_token_number": function_token_number,
+            "function_vocabulary": function_vocabulary,
             "lm": RandomLM(n_vocab=vocab_size, 
-                    n_emb=embedding_size, n_hidden=hidden_size, seed=seed)}
+                           function_vocab=function_vocabulary,
+                           n_emb=embedding_size, 
+                           n_hidden=hidden_size, 
+                           seed=seed)}

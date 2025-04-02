@@ -111,12 +111,12 @@ class MazeBase(object):
         agent_grid_idx = tuple(self._agent_grid)
 
         reward = self._instant_rewards[agent_grid_idx] + self._step_reward
-        done = False
+        terminated = False
         if(self.reach_goal() or self.step_limits()):
-            done = self.refresh_command()
-        done = done or self.episode_steps_limit()
+            terminated = self.refresh_command()
+        truncated = self.episode_steps_limit()
 
-        return reward, done
+        return reward, terminated, truncated
 
     def do_action(self, action):
         raise NotImplementedError()

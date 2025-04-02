@@ -56,10 +56,10 @@ class MazeCoreContinuous3D(MazeBase):
                 self._cell_walls, self._cell_size, self.collision_dist)
         self._collision_punish = self._collision_reward * collide
         self._agent_grid = self.get_loc_grid(self._agent_loc)
-        reward, done = self.evaluation_rule()
+        reward, terminated, truncated = self.evaluation_rule()
         self.update_observation()
 
-        return reward, done
+        return reward, terminated, truncated
 
     def render_init(self, view_size):
         super(MazeCoreContinuous3D, self).render_init(view_size)

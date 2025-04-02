@@ -51,7 +51,7 @@ Here is an example of creating and running MazeWorld environments
 
 ## Creating Maze Environments
 ```python
-import gym
+import gymnasium as gym
 import xenoverse.mazeworld
 from xenoverse.mazeworld import MazeTaskSampler
 
@@ -92,7 +92,7 @@ initial_observation, initial_information = maze_env.reset()
 done = False
 while not done:
     action = maze_env.action_space.sample() # Replace it with your own policy function
-    observation, reward, done, info = maze_env.step(action)
+    observation, reward, terminated, truncated, info = maze_env.step(action)
     maze_env.render()
 ```
 

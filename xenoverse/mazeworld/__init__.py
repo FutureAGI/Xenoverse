@@ -12,13 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from gym.envs.registration import register
+from gymnasium.envs.registration import register
 from xenoverse.mazeworld.envs import MazeWorldContinuous3D
 from xenoverse.mazeworld.envs import MazeTaskSampler, Resampler
 
 register(
     id='mazeworld-v2',
     entry_point='xenoverse.mazeworld:MazeWorldContinuous3D',
+    order_enforce=False,
+    disable_env_checker=True,
     kwargs={
         "enable_render": True,
         "render_scale": 480,

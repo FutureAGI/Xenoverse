@@ -25,7 +25,7 @@ pip install .[anyhvac]
 Import and create the AnyHVAC environment:
 
 ```python
-import gym
+import gymnasium as gym
 import xenoverse.anyhvac
 
 env = gym.make("anyhvac-visualizer-v0", # use `anyhvac-v0` for non-visualizer version
@@ -46,7 +46,7 @@ from xenoverse.anyhvac import HVACTaskSampler
 
 task = AnyMDPTaskSampler()
 env.set_task(task)
-env.reset()
+observation, info = env.reset()
 ```
 
 ## Running the built-in PID solver based on sensor - actuator correlation
@@ -55,9 +55,8 @@ from xenoverse.anyhvac import HVACSolverGTPID
 
 solver = HVACSolverGTPID(env)  # Use PID controller and chtc to solve
 state, info = env.reset()
-done = False
-while not done:
+terminated, truncated = False, False
+while (not terminated) and (not truncated):
     action = solver.policy()
-    state, reward, done, info = env.step(action)
+    state, reward, terminated, truncated, info = env.step(action)
 ```
-

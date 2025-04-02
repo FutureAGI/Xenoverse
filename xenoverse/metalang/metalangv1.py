@@ -15,10 +15,9 @@
 import sys
 import _io
 import numpy
-import gym
 from numpy import random
 
-class MetaLangV1(gym.Env):
+class MetaLangV1(object):
     """
     Meta Language Model
     MetaLM(V, n, l, e, L) generates n Exponential(1/l)-length sequences, which appears repeatedly until reaching length L

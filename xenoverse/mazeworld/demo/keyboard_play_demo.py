@@ -1,4 +1,4 @@
-import gym
+import gymnasium as gym
 import sys
 import argparse
 import xenoverse.mazeworld
@@ -25,12 +25,12 @@ if __name__=='__main__':
     maze_env.set_task(task)
 
     maze_env.reset()
-    done=False
+    terminated, truncated = False, False
     sum_reward = 0
 
-    while not done:
+    while (not terminated) and (not truncated):
         maze_env.render()
-        state, reward, done, _ = maze_env.step(None)
+        state, reward, terminated, truncated, _ = maze_env.step(None)
         sum_reward += reward
         print("Instant r = %.2f, Accumulate r = %.2f" % (reward, sum_reward))
         if(maze_env.key_done):

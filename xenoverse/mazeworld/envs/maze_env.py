@@ -2,7 +2,7 @@
 Gym Environment For Maze3D
 """
 import numpy
-import gym
+import gymnasium as gym
 import pygame
 
 from gym import error, spaces, utils
@@ -56,14 +56,14 @@ class MazeWorldEnvBase(gym.Env):
         # In keyboard control, process only continues when key is pressed
         info = {"steps": self.maze_core.steps}
         if(internal_action is None):
-            return self.maze_core.get_observation(), 0, False, info 
-        reward, done = self.maze_core.do_action(internal_action)
+            return self.maze_core.get_observation(), 0, False, False, info 
+        reward, terminated, truncated = self.maze_core.do_action(internal_action)
         self.maze_core.get_info(info)
 
-        if(done):
+        if(terminated or truncated):
             self.need_reset=True
 
-        return self.maze_core.get_observation(), reward, done, info
+        return self.maze_core.get_observation(), reward, terminated, truncated, info
 
     def render(self, mode="human"):
         if(mode != "human"):

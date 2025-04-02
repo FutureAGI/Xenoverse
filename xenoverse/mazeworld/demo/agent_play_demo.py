@@ -1,4 +1,4 @@
-import gym
+import gymnasium as gym
 import sys
 import argparse
 import time
@@ -33,13 +33,13 @@ if __name__=='__main__':
         agent = SmartSLAMAgent(maze_env=maze_env, memory_keep_ratio=args.memory_keep_ratio, render=True)
 
     observation, _ = maze_env.reset()
-    done=False
+    terminated, truncated = False, False
     sum_reward = 0
     reward = 0
 
-    while not done:
+    while (not terminated) and (not truncated):
         action = agent.step(observation, reward)
-        observation, reward, done, _ = maze_env.step(action)
+        observation, reward, terminated, truncated, _ = maze_env.step(action)
         sum_reward += reward
         if(args.verbose):
             print("Instant r = %.2f, Accumulate r = %.2f" % (reward, sum_reward))
