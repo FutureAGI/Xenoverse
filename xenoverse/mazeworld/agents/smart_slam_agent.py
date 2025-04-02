@@ -5,7 +5,7 @@ from .agent_base import AgentBase
 from queue import Queue
 from pygame import font
 from xenoverse.mazeworld.envs.dynamics import PI
-from xenoverse.mazeworld.envs.utils import conv2d_numpy
+from xenoverse.utils import conv2d_numpy
 from xenoverse.mazeworld.envs.dynamics import search_optimal_action
 from xenoverse.mazeworld.envs.ray_caster_utils import landmarks_color, landmarks_rgb, landmarks_rgb_arr, paint_agent_arrow
 
