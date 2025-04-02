@@ -211,6 +211,12 @@ def transition_sampler(state_space:int,
         sigma = avg_dist * random.exponential(scale=1.0)
 
         prob_s_a_s = numpy.exp(- (dist_s_a_s / sigma) ** 2)
+        # check and avoid the case where all the probability is 0
+        sum_prob_s_a_s_trivial = (numpy.sum(prob_s_a_s, axis=2) < eps)
+        while(sum_prob_s_a_s_trivial.any()):
+            sigma *= 2.0
+            prob_s_a_s = numpy.exp(- (dist_s_a_s / sigma) ** 2)
+            sum_prob_s_a_s_trivial = (numpy.sum(prob_s_a_s, axis=2) < eps)
 
         # Now sample the transition by masking the state-action-state distance
         dist_s_a_s_index = numpy.argsort(dist_s_a_s, axis=2)[:, :, :adj_ub]
