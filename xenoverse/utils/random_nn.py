@@ -199,12 +199,16 @@ class RandomLM(object):
     '''
     A class for generating random GRUs with given parameters
     '''
-    def __init__(self, n_vocab, n_emb, n_hidden, 
-                 function_token_number=10,
+    def __init__(self, n_vocab, function_vocab, n_emb, n_hidden, 
                  seed=None):
         # Set the seed for the random number generator
         self.n_vocab = n_vocab
-        self.function_token_number = function_token_number
+        self.function_vocab = function_vocab
+        self.stop_token = function_vocab['s']
+        self.function_token_list = []
+        for key,kid in function_vocab.items():
+            if(key != 's'):
+                self.function_token_list.append(kid)
         self.enc = RandomMLP(n_vocab, n_emb, seed=seed)
         self.dec = RandomMLP(n_hidden, n_vocab, seed=seed)
         self.rnn = RandomRNN(n_emb, n_hidden, seed=seed)
@@ -235,8 +239,8 @@ class RandomLM(object):
         decodings = self.dec(hiddens)
 
         logits = decodings + self.echo_bias
-        logits[0] += self.stop_bias
-        logits[1:self.function_token_number] = -1.0e+6
+        logits[self.stop_token] += self.stop_bias
+        logits[self.function_token_list] = -1.0e+6
         if(self.stop_bias < 0):
             self.stop_bias = self.stop_inc  # avoid stop from the beginning
         else:
@@ -267,7 +271,7 @@ class RandomLM(object):
         while not done:
             next_token, ppl = self.generate_one_step(inputs, temperature=T, decode_type=decode_type)
             ppls.append(ppl)
-            if(next_token == 0):
+            if(next_token == self.stop_token):
                 done=True
             else:
                 output.append(next_token)
@@ -308,7 +312,7 @@ class RandomLM(object):
         label_toks = []
         prev_token = 0
 
-        for i,tok in enumerate(ans+[0]):  # consider also the stop token
+        for i,tok in enumerate(ans+[self.stop_token]):  # consider also the stop token
             logits = self.forward(prev_token)
             probs = numpy.exp(logits)
             probs /= numpy.sum(probs)

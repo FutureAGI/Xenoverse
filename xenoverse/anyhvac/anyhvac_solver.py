@@ -19,20 +19,18 @@ class HVACSolverGTPID(object):
         self.minimum_action = numpy.ones(len(self.coolers)) * 0.01
         self.last_action = numpy.copy(self.minimum_action)
         self.acc_diff = numpy.zeros(len(self.sensors))
-        self.last_observation = numpy.array(self.env.get_observation())
+        self.last_observation = numpy.array(self.env._get_obs())
         self.ki = 1.0e-2
         self.kp = 1.0e-3
         self.kd = 1.0e-3
 
-    def policy(self):
-        sensors = numpy.array(self.env.get_observation())
-        diff = self.target_temperature - sensors
+    def policy(self, observation):
+        diff = self.target_temperature - numpy.array(observation)
         last_diff = self.target_temperature - self.last_observation
         self.acc_diff += diff
 
         d_e =  - (self.kp * diff + self.kd * (diff - last_diff) + self.ki * self.acc_diff)
         action = numpy.matmul(d_e, self.corr_sensor_cooler)
         self.last_action = action
-        self.last_observation = numpy.copy(sensors)
+        self.last_observation = numpy.copy(observation)
         return action
-
