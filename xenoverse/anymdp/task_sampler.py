@@ -218,7 +218,8 @@ def transition_sampler(state_space:int,
         sum_prob_s_a_s_trivial = (numpy.sum(prob_s_a_s, axis=2) < eps)
         while(sum_prob_s_a_s_trivial.any()):
             sigma *= 2.0
-            prob_s_a_s = numpy.exp(- (dist_s_a_s / sigma) ** 2)
+            for i_s, i_a in zip(*numpy.where(sum_prob_s_a_s_trivial)):
+                prob_s_a_s[i_s] = numpy.exp(- (dist_s_a_s[i_s] / sigma) ** 2)
             sum_prob_s_a_s_trivial = (numpy.sum(prob_s_a_s, axis=2) < eps)
 
         # Now sample the transition by masking the state-action-state distance
