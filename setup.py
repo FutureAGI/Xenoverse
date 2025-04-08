@@ -39,7 +39,7 @@ setup(
     tests_require=['pytest', 'mock'],
     include_package_data=True,
     install_requires=[
-        'gym>=0.18.0',
+        'gymnasium>=1.0.0',
         'numpy>=1.24.4',
         'Pillow>=6.2.2',
         'six>=1.12.0',

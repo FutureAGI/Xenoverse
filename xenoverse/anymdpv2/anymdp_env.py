@@ -2,7 +2,7 @@
 Gym Environment For Any MDP
 """
 import numpy
-import gym
+import gymnasium as gym
 import pygame
 import random as rnd
 from numpy import random
@@ -63,13 +63,13 @@ class AnyMDPEnv(gym.Env):
 
         ### Essential Rewards specified by different goals
         reward = self.average_cost
-        done = False
+        terminated = False
         for goal in self.goals:
             r,d,info=goal(self._inner_state, next_inner_state, t=self.steps, need_reward_shaping=self.reward_shaping)
             if(self.reward_shaping):
                 r = info["shaped_reward"]
             reward += r
-            done = done or d
+            terminated = terminated or d
 
         ### Calculate Universal Random Reward
         if("random_reward_fields" in self.__dict__):
@@ -85,12 +85,13 @@ class AnyMDPEnv(gym.Env):
         self._inner_state = next_inner_state
         self._state = self.observation_map(self._inner_state)
         oob = (numpy.abs(self._inner_state) > self.box_size)
-        done = (self.steps >= self.max_steps or done or oob.any())
+        terminated = oob.any() or terminated
+        truncated = (self.steps >= self.max_steps)
  
-        if(done):
+        if(terminated or truncated):
             self.need_reset = True
 
-        return self._state, reward, done, info
+        return self._state, reward, terminated, truncated, info
     
     @property
     def state(self):

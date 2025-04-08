@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from gym.envs.registration import register
+from gymnasium.envs.registration import register
 from xenoverse.anymdp.anymdp_env import AnyMDPEnv, AnyMDPEnvD2C
 from xenoverse.anymdp.anymdp_solver_opt import AnyMDPSolverOpt
 from xenoverse.anymdp.anymdp_solver_ots import AnyMDPSolverOTS
@@ -23,12 +23,16 @@ from xenoverse.anymdp.visualizer import task_visualizer
 register(
     id='anymdp-v0',
     entry_point='xenoverse.anymdp:AnyMDPEnv',
+    order_enforce=False,
+    disable_env_checker=True,
     kwargs={"max_steps": 5000},
 )
 
 register(
     id='anymdp-d2c-v0',
     entry_point='xenoverse.anymdp:AnyMDPEnvD2C',
+    order_enforce=False,
+    disable_env_checker=True,
     kwargs={"max_steps": 5000,
             "state_dim": 16},
 )

@@ -1,5 +1,5 @@
 if __name__=="__main__":
-    import gym
+    import gymnasium as gym
     import numpy
     from xenoverse.anymdpv2 import AnyMDPv2TaskSampler
 
@@ -24,7 +24,7 @@ if __name__=="__main__":
     episode_steps = 0
     while steps < max_steps:
         action = env.action_space.sample()
-        state, reward, done, info = env.step(action)
+        state, reward, terminated, truncated, info = env.step(action)
         acc_reward += reward
         epoch_reward += reward
         steps += 1
@@ -32,7 +32,7 @@ if __name__=="__main__":
         if(steps % prt_freq == 0 and steps > 0):
             print("Step:{}\tEpoch Reward: {}".format(steps, epoch_reward))
             epoch_reward = 0
-        if(done):
+        if(terminated or truncated):
             step_lst.append(episode_steps)
             episode_steps = 0
             state, info = env.reset()
