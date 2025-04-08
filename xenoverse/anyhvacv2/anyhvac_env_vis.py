@@ -10,15 +10,19 @@ class HVACEnvVisible(HVACEnv):
         self.empty_region = 20
 
     def reset(self, *args, **kwargs):
-        super().reset(*args, **kwargs)
+        res =super().reset(*args, **kwargs)
         self.render_init(render_size=640)
         self.keyboard_press = pygame.key.get_pressed()
+        return res
 
     def step(self, actions):
         actions = numpy.clip(actions, 0, 1)
-        observation, reward, done, info = super().step(actions)
+        observation, reward, terminated, truncated, info = super().step(actions)
+
         keydone, _ = self.render_update(info["heat_power"], info['c_energys'], info["chtc_array"])
-        return observation, reward, (done or keydone), info
+        truncated = truncated or keydone
+        return observation, reward, terminated, truncated, info
+
 
     def render_init(self, render_size=640):
         """

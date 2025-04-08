@@ -44,14 +44,18 @@ class HVACEnv(gym.Env):
         n_coolers = len(self.coolers)
         n_sensors = len(self.sensors)
 
-        self.topology = numpy.zeros((n_coolers, n_coolers))
-        for i, cooler_i in enumerate(self.coolers):
-            for j, cooler_j in enumerate(self.coolers):
-                if (i > j):
-                    self.topology[i, j] = numpy.sqrt(numpy.sum((cooler_i.loc - cooler_j.loc) ** 2))
+        self.cooler_topology = numpy.zeros((n_coolers, n_coolers))
+        self.cooler_sensor_topology = numpy.zeros((n_coolers, n_sensors))
+        for i,cooler_i in enumerate(self.coolers):
+             for j,cooler_j in enumerate(self.coolers):
+                  if (i > j):
+                      self.cooler_topology[i,j] = numpy.sqrt(numpy.sum((cooler_i.loc - cooler_j.loc) ** 2))
         for i in range(n_coolers):
-            for j in range(i + 1, n_coolers):
-                self.topology[i, j] = self.topology[j, i]
+              for j in range(i + 1, n_coolers):
+                   self.cooler_topology[i, j] = self.cooler_topology[j, i]
+        for i,cooler in enumerate(self.coolers):
+           for j,sensor in enumerate(self.sensors):
+                self.cooler_sensor_topology[i, j] = numpy.sqrt(numpy.sum((cooler.loc - sensor.loc) ** 2))
 
         # calculate cross sectional area
         self.csa = self.cell_size * self.floor_height
@@ -59,8 +63,14 @@ class HVACEnv(gym.Env):
         self.action_space = gym.spaces.Box(low=0, high=1, shape=(n_coolers * 2,), dtype=numpy.float32)
         self.observation_space = gym.spaces.Box(low=-273, high=273, shape=(n_sensors,), dtype=numpy.float32)
 
-    def get_observation(self):
-        return [sensor(self.state) for sensor in self.sensors]
+    def _get_obs(self):
+         return [sensor(self.state) for sensor in self.sensors]
+    
+    def _get_state(self):
+        return numpy.copy(self.state)
+
+    def _get_info(self):
+        return {"state": self._get_state(), "time": self.t, "topology_cooler": numpy.copy(self.cooler_topology), "topology_cooler_sensor":numpy.copy(self.cooler_sensor_topology),"area_divider": self.area_divider}
 
     def reset(self):
         self.state = numpy.full((self.n_width, self.n_length), self.ambient_temp)
@@ -70,9 +80,9 @@ class HVACEnv(gym.Env):
         self.last_action = numpy.zeros(self.action_space.shape[0])
         self.episode_step = 0
 
-        observation = self.get_observation()
+        observation = self._get_obs()
 
-        return observation
+        return observation, self._get_info()
 
     def action_transfer(self, action):
         # transfer to working status and set temperature
@@ -149,18 +159,19 @@ class HVACEnv(gym.Env):
         self.episode_step += 1
         action = numpy.clip(action, 0, 1)
         equip_heat, chtc_array, energy, c_energys = self.update_states(action, dt=self.sec_per_iter, n=self.iter_per_step)
-        observation = self.get_observation()
-        reward, done = self.reward(observation, action, energy)
-        done = done or (self.episode_step >= self.max_steps)
+        observation = self._get_obs()
+        reward, terminated = self.reward(observation, action, energy)
+        truncated = self.episode_step >= self.max_steps
         self.last_action = numpy.copy(action)
-        info = {"topology": numpy.copy(self.topology),
-                "gt_temperature": numpy.copy(self.state),
+
+        info = self._get_info()
+        info.update({
                 "last_control": numpy.copy(self.last_action),
                 "heat_power": numpy.copy(equip_heat),
                 "chtc_array": numpy.copy(chtc_array),
                 "energy": energy,
                 "c_energys": c_energys,
-                "area_divider": self.area_divider}
+                })
         if self.verbose:
-            print(f"step:{self.episode_step},reward:{reward}, done:{done},\nobservation:{observation}")
-        return observation, reward, done, info
+            print(f"step:{self.episode_step},reward:{reward}, terminated:{terminated},\nobservation:{observation}")
+        return observation, reward, terminated, truncated, info
