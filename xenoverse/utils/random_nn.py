@@ -24,8 +24,28 @@ def gen_uniform_matrix(n_in, n_out):
     numpy.fill_diagonal(sm, s)
     return u @ sm @ vt
 
+def xavier_normal_init(n_in, n_out, gain=1.0):
+    scale = numpy.sqrt(2.0 / (n_in + n_out))
+    weights = random.normal(0, scale, size=(n_out, n_in)) * gain
+    return weights
+
+def orthogonal_init(n_in, n_out, gain=1.0):
+    weights = numpy.random.normal(0, 1, size=(n_out, n_in))
+    if n_out < n_in:
+        q, r = numpy.linalg.qr(weights.T)
+    else:
+        q, r = numpy.linalg.qr(weights)
+    d = numpy.diag(r)
+    ph = numpy.sign(d)
+    q *= ph
+    if n_out < n_in:
+        q = q.T
+    return q * gain
+
 def weights_and_biases(n_in, n_out, need_bias=False):
-    weights = gen_uniform_matrix(n_in, n_out)
+    # weights = gen_uniform_matrix(n_in, n_out)
+    # weights = orthogonal_init(n_in, n_out, 3)
+    weights = xavier_normal_init(n_in, n_out, 3)
     if(need_bias):
         bias = 0.1 * random.normal(size=[n_out])
     else:
