@@ -2,12 +2,11 @@
 Gym Environment For Any MDP
 """
 import numpy
-import gym
+import gymnasium as gym
 import pygame
 from numpy import random
 
-from gym import error, spaces, utils
-from gym.utils import seeding
+from gymnasium import spaces
 from xenoverse.utils import pseudo_random_seed
 
 class AnyMDPEnv(gym.Env):
@@ -15,8 +14,8 @@ class AnyMDPEnv(gym.Env):
         """
         Pay Attention max_steps might be reseted by task settings
         """
-        self.observation_space = spaces.Discrete(2)
-        self.action_space = spaces.Discrete(2)
+        self.observation_space = spaces.Discrete(1)
+        self.action_space = spaces.Discrete(1)
         self.max_steps = max_steps
         self.task_set = False
 
@@ -94,10 +93,11 @@ class AnyMDPEnv(gym.Env):
         self._state = next_state
         #print("inner", next_state, "outer", self.state_mapping[next_state], self.max_steps,
         #      "triggers", self.reset_triggers, "starts", self.reset_states)
-        done = (self.steps >= self.max_steps or self.reset_triggers[self._state])
-        if(done):
+        terminated = self.reset_triggers[self._state]
+        truncated = self.steps >= self.max_steps
+        if(terminated or truncated):
             self.need_reset = True
-        return self.state_mapping[next_state], reward, done, info
+        return self.state_mapping[next_state], reward, terminated, truncated, info
     
     @property
     def state(self):

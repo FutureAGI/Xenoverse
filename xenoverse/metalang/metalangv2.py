@@ -14,7 +14,6 @@
 
 import sys
 import numpy
-import gym
 from numpy import random
 
 
@@ -77,7 +76,7 @@ class RandomNGram(object):
 
         return numpy.transpose(numpy.asarray(seqs, dtype="int32"))
 
-class MetaLangV2(gym.Env):
+class MetaLangV2():
     """
     Pseudo Langauge Generated from RNN models
     V: vocabulary size

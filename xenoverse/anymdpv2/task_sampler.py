@@ -2,7 +2,7 @@
 Any MDP Task Sampler
 """
 import numpy
-import gym
+import gymnasium as gym
 import pygame
 import time
 from numpy import random

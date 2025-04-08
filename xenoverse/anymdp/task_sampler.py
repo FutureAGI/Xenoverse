@@ -18,7 +18,6 @@ def reward_sampler_sas(state_space:int,
                    reward_noise_max:float=0.30):
     reward_mask = numpy.zeros((state_space,))
     reward_sparsity = min(reward_sparsity * random.exponential(1.0), 1.0)
-    positive_ratio = min(positive_ratio * random.exponential(1.0), 1.0)
     reward_mask = random.binomial(1, reward_sparsity, size=(state_space,))
     reward_noise_mask = random.binomial(1, reward_sparsity, size=(state_space,))
     reward_noise = reward_noise_mask * reward_noise_max  * random.random() * random.rand(state_space)
@@ -29,8 +28,12 @@ def reward_sampler_sas(state_space:int,
     return reward_matrix, reward_noise
 
 def comb_sampler(n):
-    comb_type = bin(random.randint(0, 2 ** n))[3:]
-    if(len(comb_type) < n):
+    # 生成范围[0, 2^n -1]，确保均匀性
+    num = random.randint(0, 2 ** n - 1)
+    # 使用 [2:] 仅移除 '0b' 前缀，保留所有有效位
+    comb_type = bin(num)[2:]
+    # 补零或截断至 n 位
+    if len(comb_type) < n:
         comb_type = '0' * (n - len(comb_type)) + comb_type
     else:
         comb_type = comb_type[-n:]
@@ -211,6 +214,13 @@ def transition_sampler(state_space:int,
         sigma = avg_dist * random.exponential(scale=1.0)
 
         prob_s_a_s = numpy.exp(- (dist_s_a_s / sigma) ** 2)
+        # check and avoid the case where all the probability is 0
+        sum_prob_s_a_s_trivial = (numpy.sum(prob_s_a_s, axis=2) < eps)
+        while(sum_prob_s_a_s_trivial.any()):
+            sigma *= 2.0
+            for i_s, i_a in zip(*numpy.where(sum_prob_s_a_s_trivial)):
+                prob_s_a_s[i_s] = numpy.exp(- (dist_s_a_s[i_s] / sigma) ** 2)
+            sum_prob_s_a_s_trivial = (numpy.sum(prob_s_a_s, axis=2) < eps)
 
         # Now sample the transition by masking the state-action-state distance
         dist_s_a_s_index = numpy.argsort(dist_s_a_s, axis=2)[:, :, :adj_ub]

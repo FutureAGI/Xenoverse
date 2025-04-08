@@ -26,22 +26,16 @@ class AnyMDPv2Visualizer(AnyMDPEnv):
         self.inner_state_records.append(numpy.copy(self.inner_state))
         self.reward_records.append(0.0)
 
-        return obs
+        return obs, info
     
     def step(self, action):
-        result = super().step(action)
-        # 判断返回结果的长度来兼容旧版和新版 Gym
-        if len(result) == 5:
-            obs, reward, terminated, truncated, info = result
-            done = terminated or truncated
-        else:
-            obs, reward, done, info = result
+        obs, reward, terminated, truncated, info = super().step(action)
 
         self.observation_records.append(numpy.copy(obs))
         self.inner_state_records.append(numpy.copy(self.inner_state))
         self.action_records.append(numpy.copy(action))
         self.reward_records.append(reward)
-        return obs, reward, done, info
+        return obs, reward, terminated, truncated, info
 
     def visualize_and_save(self, filename=None):
         tsne = TSNE(n_components=2, random_state=pseudo_random_seed(),

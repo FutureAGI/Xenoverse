@@ -24,8 +24,28 @@ def gen_uniform_matrix(n_in, n_out):
     numpy.fill_diagonal(sm, s)
     return u @ sm @ vt
 
+def xavier_normal_init(n_in, n_out, gain=1.0):
+    scale = numpy.sqrt(2.0 / (n_in + n_out))
+    weights = random.normal(0, scale, size=(n_out, n_in)) * gain
+    return weights
+
+def orthogonal_init(n_in, n_out, gain=1.0):
+    weights = numpy.random.normal(0, 1, size=(n_out, n_in))
+    if n_out < n_in:
+        q, r = numpy.linalg.qr(weights.T)
+    else:
+        q, r = numpy.linalg.qr(weights)
+    d = numpy.diag(r)
+    ph = numpy.sign(d)
+    q *= ph
+    if n_out < n_in:
+        q = q.T
+    return q * gain
+
 def weights_and_biases(n_in, n_out, need_bias=False):
-    weights = gen_uniform_matrix(n_in, n_out)
+    # weights = gen_uniform_matrix(n_in, n_out)
+    # weights = orthogonal_init(n_in, n_out, 3)
+    weights = xavier_normal_init(n_in, n_out, 3)
     if(need_bias):
         bias = 0.1 * random.normal(size=[n_out])
     else:
@@ -199,12 +219,16 @@ class RandomLM(object):
     '''
     A class for generating random GRUs with given parameters
     '''
-    def __init__(self, n_vocab, n_emb, n_hidden, 
-                 function_token_number=10,
+    def __init__(self, n_vocab, function_vocab, n_emb, n_hidden, 
                  seed=None):
         # Set the seed for the random number generator
         self.n_vocab = n_vocab
-        self.function_token_number = function_token_number
+        self.function_vocab = function_vocab
+        self.stop_token = function_vocab['s']
+        self.function_token_list = []
+        for key,kid in function_vocab.items():
+            if(key != 's'):
+                self.function_token_list.append(kid)
         self.enc = RandomMLP(n_vocab, n_emb, seed=seed)
         self.dec = RandomMLP(n_hidden, n_vocab, seed=seed)
         self.rnn = RandomRNN(n_emb, n_hidden, seed=seed)
@@ -235,8 +259,8 @@ class RandomLM(object):
         decodings = self.dec(hiddens)
 
         logits = decodings + self.echo_bias
-        logits[0] += self.stop_bias
-        logits[1:self.function_token_number] = -1.0e+6
+        logits[self.stop_token] += self.stop_bias
+        logits[self.function_token_list] = -1.0e+6
         if(self.stop_bias < 0):
             self.stop_bias = self.stop_inc  # avoid stop from the beginning
         else:
@@ -267,7 +291,7 @@ class RandomLM(object):
         while not done:
             next_token, ppl = self.generate_one_step(inputs, temperature=T, decode_type=decode_type)
             ppls.append(ppl)
-            if(next_token == 0):
+            if(next_token == self.stop_token):
                 done=True
             else:
                 output.append(next_token)
@@ -308,7 +332,7 @@ class RandomLM(object):
         label_toks = []
         prev_token = 0
 
-        for i,tok in enumerate(ans+[0]):  # consider also the stop token
+        for i,tok in enumerate(ans+[self.stop_token]):  # consider also the stop token
             logits = self.forward(prev_token)
             probs = numpy.exp(logits)
             probs /= numpy.sum(probs)

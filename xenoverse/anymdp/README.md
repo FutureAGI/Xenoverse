@@ -23,7 +23,7 @@ pip install .[anymdp]
 
 Import and create the AnyMDP environment with 
 ```python
-import gym
+import gymnasium as gym
 import xenoverse.anymdp
 
 env = gym.make("anymdp-v0", max_steps=5000)
@@ -56,10 +56,10 @@ from xenoverse.anymdp import AnyMDPSolverOpt
 
 solver = AnyMDPSolverOpt(env)  # AnyMDPSolverOpt solves the MDP with ground truth rewards and transition matrix
 state, info = env.reset()
-done = False
-while not done:
+terminated, truncated = False, False
+while not terminated and not truncated:
     action = solver.policy(state)
-    state, reward, done, info = env.step(action)
+    state, reward, terminated, truncated, info = env.step(action)
 ```
 
 In case you do not want the ground truth rewards and transition to be leaked to the agent, use the AnyMDPSolverOTS instead. This solver inplement a ideal environment modeling and a planning-based policy.
@@ -74,10 +74,10 @@ solver = AnyMDPSolverOTS(env)
 #solver = AnyMDPSolverQ(env) 
 
 state, info = env.reset()
-done = False
-while not done:
+terminated, truncated = False, False
+while not terminated and not truncated:
     action = solver.policy(state)
-    state, reward, done, info = env.step(action)
+    state, reward, terminated, truncated, info = env.step(action)
     solver.learner(state, action, next_state, reward, done) # update the learner
 ```
 

@@ -20,15 +20,18 @@ from xenoverse.anyhvac.anyhvac_solver import HVACSolverGTPID
 register(
     id='anyhvac-v0',
     entry_point='xenoverse.anyhvac.anyhvac_env:HVACEnv',
+    order_enforce=False,
+    disable_env_checker=True,
     kwargs={"max_steps": 86400,
             "target_temperature": 28,
             "upper_limit": 80,
             "iter_per_step": 600},
 )
-
 register(
     id='anyhvac-visualizer-v0',
-    entry_point='xenoverse.anyhvac.anyhvac_env:HVACEnvVisible',
+    entry_point='xenoverse.anyhvac.anyhvac_env_vis:HVACEnvVisible',
+    order_enforce=False,
+    disable_env_checker=True,
     kwargs={"max_steps": 86400,
             "target_temperature": 28,
             "upper_limit": 80,
