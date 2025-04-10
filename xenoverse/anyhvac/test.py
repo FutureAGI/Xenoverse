@@ -1,5 +1,6 @@
 if __name__ == "__main__":
     import gymnasium as gym
+    from xenoverse import anyhvac
     from xenoverse.anyhvac.anyhvac_env import HVACEnv
     from xenoverse.anyhvac.anyhvac_env_vis import HVACEnvVisible
     from xenoverse.anyhvac.anyhvac_sampler import HVACTaskSampler

@@ -18,7 +18,7 @@ class MetaLMV3Env(gym.Env):
         self.observation_space = gym.spaces.Sequence(gym.spaces.Discrete(self.vocabulary))
         self.task_set = True
 
-    def reset(self):
+    def reset(self, *args, **kwargs):
         if(self.task_set == False):
             raise Exception("Task not set")
         self.cached_query = self.lm.generate_query()

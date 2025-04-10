@@ -1,4 +1,3 @@
-import gym
 import numpy
 from numpy import random
 from numba import njit
