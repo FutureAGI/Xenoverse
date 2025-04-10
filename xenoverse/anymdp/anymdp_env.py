@@ -49,7 +49,7 @@ class AnyMDPEnv(gym.Env):
         self.task_set = True
         self.need_reset = True
 
-    def reset(self):
+    def reset(self, *args, **kwargs):
         if(not self.task_set):
             raise Exception("Must call \"set_task\" first")
         

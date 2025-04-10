@@ -44,7 +44,8 @@ setup(
         'Pillow>=6.2.2',
         'six>=1.12.0',
         'pygame>=2.6.0',
-        'numba>=0.58.1'
+        'numba>=0.58.1',
+        'scipy'
     ],
     extras_require={},
     zip_safe=False,

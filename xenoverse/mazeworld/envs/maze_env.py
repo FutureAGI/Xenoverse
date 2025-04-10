@@ -31,7 +31,7 @@ class MazeWorldEnvBase(gym.Env):
         self.maze_core.set_task(task_config)
         self.need_set_task = False
 
-    def reset(self):
+    def reset(self, *args, **kwargs):
         if(self.need_set_task):
             raise Exception("Must call \"set_task\" before reset")
         state = self.maze_core.reset()
