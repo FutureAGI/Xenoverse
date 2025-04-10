@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from gym.envs.registration import register
+from gymnasium.envs.registration import register
 from xenoverse.anyhvac.anyhvac_env import HVACEnv
 from xenoverse.anyhvac.anyhvac_env_vis import HVACEnvVisible
 from xenoverse.anyhvac.anyhvac_solver import HVACSolverGTPID

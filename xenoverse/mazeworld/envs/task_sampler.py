@@ -5,9 +5,6 @@ import os
 import numpy
 import pygame
 from numpy import random
-from collections import namedtuple
-from numpy import random as npyrnd
-from numpy.linalg import norm
 from copy import deepcopy
 from xenoverse.utils import genmaze_by_primwall
 from xenoverse.utils import pseudo_random_seed
