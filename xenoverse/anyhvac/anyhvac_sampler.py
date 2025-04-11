@@ -42,7 +42,7 @@ def HVACTaskSampler():
     for i in range(n_heaters):
         equipments.append(HeaterUnc(nw, nl, cell_size, cell_walls, min_dist=1.2,
                     avoidance=equipments))
-        hc_array[*equipments[-1].nloc] += rnd.uniform(20000, 80000)
+        hc_array[equipments[-1].nloc] += rnd.uniform(20000, 80000)
     for i in range(n_coolers):
         coolers.append(Cooler(nw, nl, cell_size, cell_walls, min_dist=min(cell_size, 2.0),
                     avoidance=coolers))
