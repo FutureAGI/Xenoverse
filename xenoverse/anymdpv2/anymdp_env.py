@@ -36,7 +36,7 @@ class AnyMDPEnv(gym.Env):
             print('Task Mode:', self.mode)
             print('ndim:', self.ndim)
 
-    def reset(self):
+    def reset(self, *args, **kwargs):
         if(not self.task_set):
             raise Exception("Must call \"set_task\" first")
         

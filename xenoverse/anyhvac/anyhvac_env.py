@@ -63,7 +63,7 @@ class HVACEnv(gym.Env):
     def _get_info(self):
         return {"state": self._get_state(), "time": self.t, "topology_cooler": numpy.copy(self.cooler_topology), "topology_cooler_sensor":numpy.copy(self.cooler_sensor_topology)}
 
-    def reset(self):
+    def reset(self, *args, **kwargs):
         self.state = numpy.full((self.n_width, self.n_length), self.ambient_temp)
         # Add some initial noise
         self.state = self.state + numpy.random.normal(0, 2.0, (self.n_width, self.n_length))

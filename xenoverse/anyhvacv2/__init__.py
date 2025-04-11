@@ -1,4 +1,4 @@
-from gym.envs.registration import register
+from gymnasium.envs.registration import register
 from xenoverse.anyhvacv2.anyhvac_env import HVACEnv
 from xenoverse.anyhvacv2.anyhvac_env_vis import HVACEnvVisible
 
