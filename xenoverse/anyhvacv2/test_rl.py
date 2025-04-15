@@ -43,7 +43,7 @@ if __name__ == "__main__":
             "start_method": "spawn"
         },
         verbose = 0,
-        device="cpu"  # 使用GPU加速
+        device="cuda"  # 使用GPU加速
     )
 
     # 训练模型
