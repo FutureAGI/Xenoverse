@@ -1,9 +1,8 @@
 if __name__ == "__main__":
-
-    from xenoverse.anyhvacv2.anyhvac_env_vis import HVACEnvVisible
+    import numpy
+    from xenoverse.anyhvacv2.anyhvac_env_vis import HVACEnvVisible, HVACEnv
     from xenoverse.anyhvacv2.anyhvac_sampler import HVACTaskSampler
     from xenoverse.anyhvacv2.anyhvac_solver import HVACSolverGTPID
-
 
     env = HVACEnvVisible(verbose=True)
     print("Sampling hvac tasks...")

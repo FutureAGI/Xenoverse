@@ -121,7 +121,7 @@ class BaseVentilator(BaseNodes):
     def step(self, power_cool, power_vent, time, building_state=None, ambient_state=None):
         heat = self.power_heat(time)
         if (building_state is not None):
-            temp_diff = ambient_state - building_state[*self.nloc]
+            temp_diff = ambient_state - building_state[tuple(self.nloc)]
         else:
             temp_diff = 2.0
 

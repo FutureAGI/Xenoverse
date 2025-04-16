@@ -167,11 +167,13 @@ class HVACEnv(gym.Env):
             self.warning_count -= 1
             self.warning_count = max(self.warning_count, 0)
 
+        info = {"fail_step_percrentage": hard_loss, "energy_cost": energy_cost, "target_cost": target_cost, "switch_cost": switch_cost}
+
         if(self.warning_count > self.warning_count_tolerance):
-            return self.failure_reward, True
+            return self.failure_reward, True, info
         
         return (self.base_reward + target_cost + switch_cost + energy_cost,  
-                False)
+                False, info)
 
     def step(self, action):
         self.episode_step += 1
@@ -181,17 +183,48 @@ class HVACEnv(gym.Env):
         # calculate average power of each cooler
         average_power = numpy.mean(powers)
 
-        reward, terminated = self.reward(observation, action, average_power)
+        reward, terminated, info = self.reward(observation, action, average_power)
         truncated = self.episode_step >= self.max_steps
         self.last_action = deepcopy(action)
 
-        info = self._get_info()
+        info.update(self._get_info())
         info.update({
                 "last_control": deepcopy(self.last_action),
                 "heat_power": numpy.copy(equip_heat),
                 "chtc_array": numpy.copy(chtc_array),
                 "cool_power": powers,
                 })
+
         if self.verbose:
             print(f"step:{self.episode_step}, reward:{reward}, terminated:{terminated},\nmax-temperature:{numpy.max(observation)}, avg-temperature:{numpy.mean(observation)}, avg-power:{average_power:.5f}, ambient_temperature:{self.ambient_temp}\n")
         return observation, reward, terminated, truncated, info
+
+    def sample_action(self, mode="random"):
+        if mode == "random":
+            return self._random_action()
+        elif mode == "pid":
+            return self._pid_action()
+        else:
+            raise ValueError(f"Unsupported mode: {mode}")
+
+    def _random_action(self):
+        return self.action_space.sample()
+
+    def _pid_action(self, pid_params=None):
+        action = np.zeros(self.action_space.shape)
+        
+        for i in range(len(self.coolers)):
+            # 开关状态强制设为1 (运行状态)
+            action[2*i] = 1.0  # 开关位
+            
+            target_temp = self.target_temperature
+            
+            # 计算对应动作值 (需标准化到0-1)
+            lb = self.lower_bound
+            ub = self.upper_bound
+            a = (target_temp - lb) / (ub - lb)
+            a = np.clip(a, 0.0, 1.0)  # 限制在合法范围
+                
+            action[2*i + 1] = a  # 温度设定位
+        
+        return action
