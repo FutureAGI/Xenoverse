@@ -15,7 +15,6 @@
 import sys
 import _io
 import numpy
-import gym
 from numpy import random
 from xenoverse.utils import pseudo_random_seed
 from xenoverse.utils import RandomLM
