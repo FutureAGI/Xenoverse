@@ -2,11 +2,14 @@ if __name__=="__main__":
     import gymnasium as gym
     import xenoverse.anymdp
     from xenoverse.anymdp import  AnyMDPSolverOpt, AnyMDPSolverOTS, AnyMDPSolverQ, AnyMDPTaskSampler
+    from xenoverse.anymdp.solver import task_diameter
 
     task = AnyMDPTaskSampler(state_space=64, 
                              action_space=5,
                              min_state_space=32,
+                             transition_check_type=1,
                              verbose=True)
+    print("task diameter:", task_diameter(task))
     max_steps = 32000
     prt_freq = 1000
 

@@ -4,16 +4,19 @@ import numpy as np
 from numpy import random as rnd
 from xenoverse.utils import RandomFourier
 
-
 class BaseNodes(object):
     def __init__(self, nw, nl, cell_size, cell_walls,
-                 min_dist=0.5, avoidance=None):
+                 min_dist=0.5, avoidance=None, 
+                 **kwargs):
         self.nw = nw
         self.nl = nl
         self.dw = nw * cell_size
         self.dl = nl * cell_size
         self.cell_size = cell_size
         self.cell_walls = cell_walls
+
+        for key, val in kwargs.items():
+            setattr(self, key, val)
 
         # 随机节点坐标
         self.loc = numpy.array([rnd.randint(0, self.dw),
@@ -34,10 +37,6 @@ class BaseNodes(object):
         self.cloc = self.loc / self.cell_size
         # 取整
         self.nloc = self.cloc.astype(int)
-        self.area = None
-
-    def set_area(self, aw, al):
-        self.area = (aw,al)
 
     def __repr__(self):
         return f"{type(self).__name__}({self.loc[0]:.1f},{self.loc[1]:.1f})\n"
@@ -46,8 +45,16 @@ class BaseNodes(object):
 class BaseSensor(BaseNodes):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        # period of the sensor noise drift
+        period = rnd.randint(100000, 300000000)  
+        # drift of the temperature
+        self.drift_periodical = RandomFourier(ndim=1, 
+                                              max_order=3, 
+                                              max_item=3, 
+                                              max_steps=period,
+                                              box_size=rnd.uniform(0.05, 0.5))
 
-    def __call__(self, state):
+    def __call__(self, state, t):
         # 计算单元格内中心偏移量
         d_loc = self.cloc - self.nloc - 0.5
 
@@ -74,12 +81,16 @@ class BaseSensor(BaseNodes):
 
         # 计算差值系数（表示和每个区域的距离）
         k = d_loc - numpy.floor(d_loc)
-        # 加权求和
-        return float(vss * (1 - k[0]) * (1 - k[1])
+        
+        # ground truth temperature
+        gt_t = float(vss * (1 - k[0]) * (1 - k[1])
                      + vds * k[0] * (1 - k[1])
                      + vsd * (1 - k[0]) * k[1]
                      + vdd * k[0] * k[1])
+        
+        drift = self.drift_periodical(t)[0]
 
+        return gt_t + drift
 
 class BaseVentilator(BaseNodes):
     def __init__(self, *args, **kwargs):
@@ -110,7 +121,7 @@ class BaseVentilator(BaseNodes):
     def step(self, power_cool, power_vent, time, building_state=None, ambient_state=None):
         heat = self.power_heat(time)
         if (building_state is not None):
-            temp_diff = ambient_state - building_state[*self.nloc]
+            temp_diff = ambient_state - building_state[tuple(self.nloc)]
         else:
             temp_diff = 2.0
 
@@ -137,7 +148,6 @@ class BaseVentilator(BaseNodes):
                 "heat": heat,
                 "power": power_cool + power_vent}
 
-
 class HeaterUnc(BaseVentilator):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -159,44 +169,76 @@ class Cooler(BaseVentilator):
     """
     set power indirectly with set temperature and return temperature
     """
-
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.temp_diff_decay_ub = rnd.uniform(0, 1.0)
-        self.temp_diff_decay_lb = rnd.uniform(-1.0, 0)
-        self.max_colling_power = 10000
+
+        # Simulate different temperature control strategy of Coolers
+        self.temp_diff_decay_ub = rnd.uniform(0.01, 2.0)
+        self.temp_diff_decay_lb = rnd.uniform(-2.0, -0.01)
+
+        self.max_cooling_power = 10000
+        self.power_vent_min = rnd.uniform(500, 1000)
+        self.min_cooling_power = self.power_vent_min
         if (rnd.random() < 0.5):
-            self.power_ratio = rnd.uniform(0.1, 0.2)  # fixed ventilator ratio
-            self.power_residual = 500
+            self.power_vent_ratio = rnd.uniform(0.05, 0.15)  # fixed ventilator ratio
         else:
-            self.power_residual = rnd.uniform(500, 1500)  # fixed ventilator power
-            self.power_ratio = 0.0
+            self.power_vent_ratio = 0.0
+            self.power_vent_min = rnd.uniform(500, 1500)  # fixed ventilator power
+
+        # drift of return sensors
+        period = rnd.randint(100000, 300000000)
+        self.drift_periodical = RandomFourier(ndim=1, 
+                                              max_order=3, 
+                                              max_item=3, 
+                                              max_steps=period,
+                                              box_size=rnd.uniform(0.05, 0.5))
+        
+    def set_control_type(self, control_type):
+        self.control_type = control_type
 
     # 根据设定温度和回风温度计算制冷功率
-    def __call__(self, action, t, building_state=None, ambient_state=None):
-        env_temp = self.calc_return_temperature(building_state)
-        switch = action[0]
+    def temperature_control(self, switch, value, t, building_state=None, ambient_state=None):
+        # calculate the return temperature as the target for control
+        env_temp = self.calc_return_temperature(building_state, t)
         if switch == 0:
             return super().step(0, 0, t, building_state=building_state, ambient_state=ambient_state)
 
-        set_temp = action[1]
+        set_temp = value
         temp_diff = env_temp - set_temp
         ratio = 0
+
+        # Proportional controller
         if temp_diff > self.temp_diff_decay_ub:
             ratio = 1
         elif temp_diff < self.temp_diff_decay_lb:
             ratio = 0
         else:
             ratio = (temp_diff - self.temp_diff_decay_lb) / (self.temp_diff_decay_ub - self.temp_diff_decay_lb)
-        power_cool = self.max_colling_power * ratio
-        if power_cool==0:
-            power_vent = max(self.power_ratio * power_cool, self.power_residual)
+        power_all = (self.max_cooling_power - self.min_cooling_power) * ratio + self.min_cooling_power
+
+        power_vent = min(max(self.power_vent_ratio * power_all, self.power_vent_min), power_all)
+        power_cool = power_all - power_vent
+        #print(temp_diff, power_cool, power_vent)
+
+        return super().step(power_cool, power_vent, t, building_state=building_state, ambient_state=ambient_state)
+    
+    def power_control(self, switch, value, t, building_state=None, ambient_state=None):
+        if(switch == 0):
+            power_cool, power_vent = 0, 0
         else:
-            power_vent = min(max(self.power_ratio * power_cool, self.power_residual), power_cool)
+            power_all = (self.max_cooling_power - self.min_cooling_power) * value + self.min_cooling_power
+            power_vent = min(max(self.power_vent_ratio * power_all, self.power_vent_min), power_all)
+            power_cool = power_all - power_vent
 
         return super().step(power_cool, power_vent, t, building_state=building_state, ambient_state=ambient_state)
 
-    def calc_return_temperature(self, state):
+    def __call__(self, *args, **kwargs):
+        if(self.control_type.lower()=="power"):
+            return self.power_control(*args, **kwargs)
+        elif(self.control_type.lower()=="temperature"):
+            return self.temperature_control(*args, **kwargs)
+
+    def calc_return_temperature(self, state, t):
         d_loc = self.cloc - self.nloc - 0.5
 
         sgrid = numpy.floor(d_loc).astype(int) + self.nloc
@@ -211,85 +253,15 @@ class Cooler(BaseVentilator):
         vds = state[dn[0], sn[1]]
         k = d_loc - numpy.floor(d_loc)
 
-        return float(vss * (1 - k[0]) * (1 - k[1])
+        gt_t = float(vss * (1 - k[0]) * (1 - k[1])
                      + vds * k[0] * (1 - k[1])
                      + vsd * (1 - k[0]) * k[1]
                      + vdd * k[0] * k[1])
+        
+        # Add temperature drifting to return temperature measure
+        drift_t = self.drift_periodical(t)[0]
 
-
-class AreaDivider(object):
-    def __init__(self, nw, nl, cell_size):
-        self.nw = nw  # 10
-        self.nl = nl  # 10
-        self.cell_size = cell_size
-        self.dw = nw * cell_size
-        self.dl = nl * cell_size
-        self.w_divs = []  # 2 4 6 8
-        self.l_divs = []  # 2 4 6 8
-        cur = 0
-        while cur < self.nw:
-            cur += rnd.randint(1, nw /2)
-            if cur < self.nw:
-                self.w_divs.append(cur)
-        cur = 0
-        while cur < self.nl:
-            cur += rnd.randint(1, nl /2)
-            if cur < self.nl:
-                self.l_divs.append(cur)
-        self.w_area = len(self.w_divs) + 1
-        self.l_area = len(self.l_divs) + 1
-        self.targets = numpy.zeros((self.w_area, self.l_area))
-        self.area_count = self.w_area * self.l_area
-        print(f"Area Divider: {self.w_divs} {self.l_divs}, size {self.w_area}x{self.l_area}")
-
-    def ramdom_target(self, standard, deviation):
-
-        for i in range(self.w_area):
-            for j in range(self.l_area):
-                self.targets[i, j] = rnd.uniform(standard - deviation, standard + deviation)
-        print(f"Target matrix: {self.targets}")
-
-    def get_target(self, node):  # 9 9
-
-        if node.area is None:
-            aw = 0
-            al = 0
-
-            if node.nloc[0] > self.w_divs[-1]:
-                aw = len(self.w_divs)
-            else:
-                for i, div in enumerate(self.w_divs):  # 2 4 6 8
-                    aw = i
-                    if node.nloc[0] < div:
-                        break
-
-            if node.nloc[1] > self.l_divs[-1]:
-                al = len(self.l_divs)
-            else:
-                for i, div in enumerate(self.l_divs):
-                    al = i
-                    if node.nloc[1] < div:
-                        break
-            node.set_area(aw, al)
-            return aw, al, self.targets[aw, al]
-        else:
-            return node.area[0], node.area[1], self.targets[node.area[0], node.area[1]]
-
-    def cal_max_temp_deviation(self, sensors, building_state):
-        dev_matrix = np.full((self.targets.shape[0], self.targets.shape[1]), -999, dtype=float)
-        # str_matrix = []
-        # for i in range(self.targets.shape[0]):
-        #     str_matrix.append([])
-        #     for j in range(self.targets.shape[1]):
-        #         str_matrix[i].append(f"sensors:")
-
-        for s in sensors:
-            aw, al, target = self.get_target(s)
-            dev_matrix[aw, al] = max(dev_matrix[aw, al], s(building_state) - target)
-            # str_matrix[aw][ay] = str_matrix[aw][ay] + f",{s(building_state):.1f} "
-
-        return dev_matrix[dev_matrix != -999]
-
+        return gt_t + drift_t
 
 def wind_diffuser(cell_wall, src, cell_size, sigma):
     # 空气扩散计算

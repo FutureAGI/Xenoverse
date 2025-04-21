@@ -254,6 +254,7 @@ def AnyMDPTaskSampler(state_space:int=128,
                  max_iteration:int=50,
                  quality_threshold_transition:float=0.55,
                  quality_threshold_valuefunction:float=0.0,
+                 transition_check_type:int=1,
                  reward_noise_choice:list=['normal'],
                  seed=None,
                  keep_metainfo=False,
@@ -286,7 +287,7 @@ def AnyMDPTaskSampler(state_space:int=128,
                                        action_space,
                                        min_state_space,
                                        max_transition_diversity))
-        qtrans = check_task_trans(task)
+        qtrans = check_task_trans(task, transition_check_type=transition_check_type)
         if(qtrans > qtrans_max):
             qtrans_max = qtrans
             best_task = deepcopy(task)

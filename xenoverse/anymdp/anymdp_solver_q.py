@@ -15,8 +15,6 @@ class AnyMDPSolverQ(object):
             raise Exception("AnyMDPEnv is not initialized by 'set_task', must call set_task first")
         self.n_actions = env.action_space.n
         self.n_states = env.observation_space.n
-        self.transition_matrix = env.transition_matrix
-        self.reward_matrix = env.reward_matrix
         self.value_matrix = numpy.zeros((self.n_states, self.n_actions))
         self.sa_vistied = numpy.zeros((self.n_states, self.n_actions))
         self.gamma = gamma

@@ -1,16 +1,20 @@
 if __name__ == "__main__":
-
-    from xenoverse.anyhvacv2.anyhvac_env_vis import HVACEnvVisible
+    import numpy
+    from xenoverse.anyhvacv2.anyhvac_env_vis import HVACEnvVisible, HVACEnv
     from xenoverse.anyhvacv2.anyhvac_sampler import HVACTaskSampler
+    from xenoverse.anyhvacv2.anyhvac_solver import HVACSolverGTPID
 
-    env = HVACEnvVisible()
+    env = HVACEnvVisible(verbose=True)
     print("Sampling hvac tasks...")
-    task = HVACTaskSampler()
+    task = HVACTaskSampler(control_type='Temperature')
     print("... Finished Sampling")
     env.set_task(task)
     terminated, truncated = False,False
-    obs = env.reset()
+    obs, info = env.reset()
+    agent = HVACSolverGTPID(env)
     while (not terminated) and (not truncated):
-        action = env.action_space.sample()
+        # Random Policy
+        #action = env.action_space.sample()
+        # Correlation PID
+        action = agent.policy(obs)
         obs, reward, terminated, truncated, info = env.step(action)
-        print("sensors - ", obs, "\nactions - ", action, "\nrewards - ", reward, "ambient temperature - ", env.ambient_temp)
