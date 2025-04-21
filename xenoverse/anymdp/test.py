@@ -7,6 +7,7 @@ if __name__=="__main__":
     task = AnyMDPTaskSampler(state_space=64, 
                              action_space=5,
                              min_state_space=32,
+                             transition_check_type=1,
                              verbose=True)
     print("task diameter:", task_diameter(task))
     max_steps = 32000

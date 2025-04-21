@@ -149,7 +149,7 @@ def check_valuefunction(t_mat, r_mat):
     return quality
 
 
-def check_task_trans(task):
+def check_task_trans(task, transition_check_type=1):
     """
     Check the quality of the task
     Requiring: Q value is diverse
@@ -167,7 +167,12 @@ def check_task_trans(task):
     if(task["transition"].shape[0] < 2):
         return 1
     t_mat = get_final_transition(**task)
-    return check_transition_2(t_mat)
+    if(transition_check_type == 1):
+        return check_transition(t_mat)
+    elif(transition_check_type == 2):
+        return check_transition_2(t_mat)
+    else:
+        raise ValueError(f"Unknown transition check type: {transition_check_type}")
 
 
 def check_task_rewards(task):
