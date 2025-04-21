@@ -4,6 +4,24 @@ from numba import njit
 import networkx as nx
 import scipy.stats as stats
 
+def graph_diameter(t_mat, threshold=1.0e-4):
+    G = nx.DiGraph()
+    ss_trans = numpy.sum(t_mat, axis=1)
+    ss_trans = ss_trans / numpy.sum(ss_trans, axis=1, keepdims=True)
+    
+    for i in range(len(ss_trans)):
+        for j in range(len(ss_trans)):
+            if(ss_trans[i][j] > threshold):
+                G.add_edge(i, j, weight=ss_trans[i][j])
+    if(not nx.is_strongly_connected(G)):
+        diameter = -1
+    else:
+        diameter = nx.diameter(G)
+    return diameter
+
+def task_diameter(task):
+    return graph_diameter(task['transition'])
+
 @njit(cache=True)
 def update_value_matrix(t_mat, r_mat, gamma, vm, max_iteration=-1, is_greedy=True):
     diff = 1.0
@@ -73,6 +91,21 @@ def check_transition(t_mat):
         return 1 # where states below 4, transition is all ok as long as strongly connected
     return quality
 
+def check_transition_2(t_mat):
+    quality = -1
+    if(t_mat is None):
+        return quality
+    d = graph_diameter(t_mat)
+    # Not connected
+    print("diameter", d)
+
+    if(d < 0):
+        return 0
+    
+    ns = t_mat.shape[0]
+    d_H = 4.0 * numpy.sqrt(ns)
+    return d / d_H
+    
 def check_valuefunction(t_mat, r_mat):
     if(t_mat is None or r_mat is None):
         return -100
@@ -134,7 +167,7 @@ def check_task_trans(task):
     if(task["transition"].shape[0] < 2):
         return 1
     t_mat = get_final_transition(**task)
-    return check_transition(t_mat)
+    return check_transition_2(t_mat)
 
 
 def check_task_rewards(task):
