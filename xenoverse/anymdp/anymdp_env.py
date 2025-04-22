@@ -91,8 +91,6 @@ class AnyMDPEnv(gym.Env):
 
         self.steps += 1
         self._state = next_state
-        #print("inner", next_state, "outer", self.state_mapping[next_state], self.max_steps,
-        #      "triggers", self.reset_triggers, "starts", self.reset_states)
         terminated = self.reset_triggers[self._state]
         truncated = self.steps >= self.max_steps
         if(terminated or truncated):

@@ -73,6 +73,6 @@ def task_visualizer(task, show_gui=True, file_path=None):
 
 
 if __name__ == '__main__':
-    from l3c.anymdp import AnyMDPTaskSampler
+    from xenoverse.anymdp import AnyMDPTaskSampler
     task = AnyMDPTaskSampler(128, 5, keep_metainfo=True)
     task_visualizer(task)

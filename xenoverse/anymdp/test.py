@@ -1,11 +1,12 @@
 if __name__=="__main__":
     import gymnasium as gym
+    import numpy
     import xenoverse.anymdp
     from xenoverse.anymdp import  AnyMDPSolverOpt, AnyMDPSolverOTS, AnyMDPSolverQ, AnyMDPTaskSampler
     from xenoverse.anymdp.solver import task_diameter
 
-    task = AnyMDPTaskSampler(state_space=64, 
-                             action_space=5,
+    task = AnyMDPTaskSampler(state_space=128, 
+                             action_space=10,
                              min_state_space=32,
                              transition_check_type=1,
                              verbose=True)
@@ -63,20 +64,24 @@ if __name__=="__main__":
     acc_reward = 0
     epoch_reward = 0
     steps = 0
-
+    epoch_step = 0
+    epoch_steps = []
     while steps < max_steps:
         action = solver.policy(state)
         state, reward, terminated, truncated, info = env.step(action)
         acc_reward += reward
         epoch_reward += reward
         steps += 1
+        epoch_step += 1
         if(steps % prt_freq == 0 and steps > 0):
             print("Step:{}\tEpoch Reward: {}".format(steps, epoch_reward))
             epoch_reward = 0
         if(terminated or truncated):
             state, info = env.reset()
+            epoch_steps.append(epoch_step)
+            epoch_step = 0
             state_list = []
-    print("Optimal Solver Summary:  {}".format(acc_reward))
+    print("Optimal Solver Summary:  {}, Averge Length: {}".format(acc_reward, numpy.mean(epoch_steps)))
 
     # Test AnyMDPSolverQ
     solver = AnyMDPSolverQ(env)

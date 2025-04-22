@@ -251,10 +251,7 @@ def AnyMDPTaskSampler(state_space:int=128,
                  min_state_space:int=None,
                  epoch_state_visit:int=4,
                  max_transition_diversity:int=8,
-                 max_iteration_transition:int=50,
-                 max_iteration_reward:int=50,
-                 quality_threshold_transition:float=0.55,
-                 quality_threshold_valuefunction:float=0.0,
+                 max_sub_iteration:int=-1,
                  transition_check_type:int=1,
                  reward_noise_choice:list=['normal'],
                  seed=None,
@@ -273,47 +270,43 @@ def AnyMDPTaskSampler(state_space:int=128,
             "action_space": action_space,
             "max_steps": max_steps}
 
-    qtrans = -1
-    qvf = -1
+    if(max_sub_iteration < 1):
+        max_sub_iteration = 10
+    
+    check_trans_passed = False
+    check_value_passed = False
+    global_trans_steps = 0
+    global_value_steps = 0
 
-    trans_step = 0
-    vf_step = 0
+    while (not check_trans_passed or not check_value_passed):
+        check_trans_passed = False
+        check_value_passed = False
+        sub_step = 0
+        while(not check_trans_passed and sub_step < max_sub_iteration):
+            task.update(transition_sampler(state_space, 
+                                        action_space,
+                                        min_state_space,
+                                        max_transition_diversity))
+            check_trans_passed = check_task_trans(task, transition_check_type=transition_check_type)
+            sub_step += 1
+            global_trans_steps += 1
 
-    qtrans_max = -100
-    qvf_max = -100
-    best_task = None
-
-    while (qtrans < quality_threshold_transition) and trans_step < max_iteration_transition:
-        task.update(transition_sampler(state_space, 
-                                       action_space,
-                                       min_state_space,
-                                       max_transition_diversity))
-        qtrans = check_task_trans(task, transition_check_type=transition_check_type)
-        if(qtrans > qtrans_max):
-            qtrans_max = qtrans
-            best_task = deepcopy(task)
-        trans_step += 1
-    task = best_task
-
-    while (qvf < quality_threshold_valuefunction) and vf_step < max_iteration_reward:
-        substate_space = task["state_mapping"].shape[0]
-        task.update(reward_sampler(task,
-                                   substate_space, 
-                                   action_space,
-                                   reward_noise_choice))
-        qvf = check_task_rewards(task)
-        if(qvf > qvf_max):
-            qvf_max = qvf
-            best_task = deepcopy(task)
-        vf_step += 1
+        sub_step = 0
+        while(not check_value_passed and sub_step < max_sub_iteration):
+            task.update(reward_sampler(task,
+                                    task["state_mapping"].shape[0], 
+                                    action_space,
+                                    reward_noise_choice))
+            check_value_passed = check_task_rewards(task)
+            sub_step += 1
+            global_value_steps += 1
 
     if(verbose):
-        print(f"Resample transitions {trans_step} times, quality: {qtrans_max:.2f}",
-              f"Rsample rewards {vf_step} times, quality: {qvf_max:.2f}")
+        print(f"Resample transitions {global_trans_steps} times,", f"Rsample rewards {global_value_steps} times,")
 
     if(not keep_metainfo):
         del task["state_embedding"]
         del task["reset_triggers_positive"]
         del task["reset_triggers_negative"]
 
-    return best_task
+    return task

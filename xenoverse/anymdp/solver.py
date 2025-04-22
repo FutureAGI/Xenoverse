@@ -3,6 +3,7 @@ from numpy import random
 from numba import njit
 import networkx as nx
 import scipy.stats as stats
+from scipy.stats import spearmanr
 
 def graph_diameter(t_mat, threshold=1.0e-4):
     G = nx.DiGraph()
@@ -18,6 +19,31 @@ def graph_diameter(t_mat, threshold=1.0e-4):
     else:
         diameter = nx.diameter(G)
     return diameter
+
+import numpy as np
+from scipy.stats import spearmanr
+
+def mean_spearmanr(X, Y):
+    if X.shape != Y.shape:
+        raise ValueError("X and Y must have the same shape")
+    if(X.ndim == 1):
+        coeff = spearmanr(X, Y)[0]
+        if(numpy.isnan(coeff)):
+            return 1.0
+        else:
+            return coeff
+    spearman_coeffs = []
+
+    for i in range(X.shape[0]):
+        x_col = X[i]
+        y_col = Y[i]
+        coeff, _ = spearmanr(x_col, y_col)
+        if(not numpy.isnan(coeff)):
+            spearman_coeffs.append(coeff)
+    mean_coeff = numpy.mean(spearman_coeffs)
+    if(len(spearman_coeffs) == 0):
+        return 1.0
+    return mean_coeff
 
 def task_diameter(task):
     return graph_diameter(task['transition'])
@@ -70,26 +96,25 @@ def get_final_reward(**task):
     return r_mat
 
 def check_transition(t_mat):
-    quality = -1
+    ns = t_mat.shape[0]
     if(t_mat is None):
         return quality
     # acquire state - to - state distribution
-    ns = t_mat.shape[0]
     log_ns = int(numpy.floor(numpy.log2(ns)))
     ss_trans = numpy.sum(t_mat, axis=1)
     ss_trans = ss_trans / numpy.sum(ss_trans, axis=1, keepdims=True)
-
+    quality = 0
     for i in range(log_ns):
         ss_trans = numpy.matmul(ss_trans, ss_trans)
         ss_unreach = numpy.sum(ss_trans < 1.0e-6)
         if(ss_unreach > 0):
             quality = max(quality, i / log_ns + ss_unreach / ns / ns)
     ss_unreach = numpy.sum(ss_trans < 1.0e-6, axis=1)
-    if(numpy.any(ss_unreach > 0)):
-        return 0
-    if(ns < 4):
-        return 1 # where states below 4, transition is all ok as long as strongly connected
-    return quality
+    if(numpy.any(ss_unreach > 0)): # not connected
+        return False
+    if(ns < 6):
+        return True # where states below 6, transition is all ok as long as strongly connected
+    return (quality > 0.50)
 
 def check_transition_2(t_mat):
     quality = -1
@@ -97,57 +122,60 @@ def check_transition_2(t_mat):
         return quality
     d = graph_diameter(t_mat)
     # Not connected
-    print("diameter", d)
-
     if(d < 0):
-        return 0
+        return False
     
     ns = t_mat.shape[0]
-    d_H = 4.0 * numpy.sqrt(ns)
-    return d / d_H
+    d_H = 2.0 * numpy.sqrt(ns)
+    return d > d_H
     
 def check_valuefunction(t_mat, r_mat):
+    # returns 0 (invalid) and 1 (valid)
     if(t_mat is None or r_mat is None):
-        return -100
+        return 0
     ns, na, _ = r_mat.shape
     if(ns < 2): # For bandit problem, only check rewards
-        if(numpy.std(r_mat) > 1.0e-3):
-            return 1
+        if(numpy.std(r_mat) > 0.01):
+            return True
         else:
-            return -100
+            return False
 
-    vm_l = update_value_matrix(t_mat, r_mat, 0.99, numpy.zeros((ns, na), dtype=float), max_iteration=5)
-    vm_s = update_value_matrix(t_mat, r_mat, 0.70, numpy.zeros((ns, na), dtype=float), max_iteration=5)
-    vm_r = update_value_matrix(t_mat, r_mat, 0.99, numpy.zeros((ns, na), dtype=float), max_iteration=5, is_greedy=False)
+    vm_l = update_value_matrix(t_mat, r_mat, 0.994, numpy.zeros((ns, na), dtype=float), max_iteration=5)
+    vm_s = update_value_matrix(t_mat, r_mat, 0.50, numpy.zeros((ns, na), dtype=float), max_iteration=5)
+    vm_r = update_value_matrix(t_mat, r_mat, 0.994, numpy.zeros((ns, na), dtype=float), max_iteration=5, is_greedy=False)
+
+    corr_ls_pi = mean_spearmanr(vm_l, vm_s)
+    corr_lr_pi = mean_spearmanr(vm_l, vm_r)
 
     vm_l = numpy.max(vm_l, axis=1)
-    vm_s = numpy.max(vm_s, axis=1)
     vm_r = numpy.max(vm_r, axis=1)
 
-    vbase = numpy.sqrt(numpy.mean(vm_r ** 2))
+    corr_lr = mean_spearmanr(vm_l, vm_r)
 
-    wht = 1.5
+    qstd = numpy.std(vm_l)
 
-    corr_ls, _ = stats.spearmanr(vm_l, vm_s)
-    corr_lr, _ = stats.spearmanr(vm_l, vm_r)
-    qdelta = wht * numpy.tanh(numpy.mean((vm_l - vm_r)) / vbase / wht)
-    qstd = wht * numpy.tanh(numpy.std(vm_l) / vbase / wht)
+    corr_pi_thres = 0.50
+    if(ns < 8):
+        corr_thres=0.95
+    elif(ns < 16):
+        corr_thres=0.90
+    elif(ns < 32):
+        corr_thres=0.70
+    elif(ns < 64):
+        corr_thres=0.60
+    else:
+        corr_thres=0.50
 
-    if(qstd < 0.1): # value function too flat
-        return -100
-
-    if(numpy.isnan(corr_lr)):
-        corr_lr = 1
-    if(numpy.isnan(corr_ls)):
-        corr_ls = 1
-
-    q_random = numpy.log((1 + 1.0e-10 - corr_lr))
-    q_longshort = numpy.log((1 + 1.0e-10 - corr_ls))
-
-    quality = q_random + q_longshort + qdelta + qstd
-
-    return quality
-
+    if(qstd < 0.01): # value function too flat
+        return False
+    elif(corr_lr > corr_thres):
+        return False
+    elif(corr_ls_pi > corr_pi_thres):
+        return False
+    elif(corr_lr_pi > corr_pi_thres):
+        return False
+    
+    return True
 
 def check_task_trans(task, transition_check_type=1):
     """
@@ -190,7 +218,7 @@ def check_task_rewards(task):
        not "reset_states" in task or
        not "reset_triggers" in task or 
        not "reward" in task):
-        return -100
+        return False
 
     t_mat = get_final_transition(**task)
     r_mat = get_final_reward(**task)
