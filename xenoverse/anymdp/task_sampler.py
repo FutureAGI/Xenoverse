@@ -251,7 +251,8 @@ def AnyMDPTaskSampler(state_space:int=128,
                  min_state_space:int=None,
                  epoch_state_visit:int=4,
                  max_transition_diversity:int=8,
-                 max_iteration:int=50,
+                 max_iteration_transition:int=50,
+                 max_iteration_reward:int=50,
                  quality_threshold_transition:float=0.55,
                  quality_threshold_valuefunction:float=0.0,
                  transition_check_type:int=1,
@@ -282,7 +283,7 @@ def AnyMDPTaskSampler(state_space:int=128,
     qvf_max = -100
     best_task = None
 
-    while (qtrans < quality_threshold_transition) and trans_step < max_iteration:
+    while (qtrans < quality_threshold_transition) and trans_step < max_iteration_transition:
         task.update(transition_sampler(state_space, 
                                        action_space,
                                        min_state_space,
@@ -294,7 +295,7 @@ def AnyMDPTaskSampler(state_space:int=128,
         trans_step += 1
     task = best_task
 
-    while (qvf < quality_threshold_valuefunction) and vf_step < max_iteration:
+    while (qvf < quality_threshold_valuefunction) and vf_step < max_iteration_reward:
         substate_space = task["state_mapping"].shape[0]
         task.update(reward_sampler(task,
                                    substate_space, 
