@@ -20,18 +20,8 @@ class AnyMDPEnv(gym.Env):
         self.task_set = False
 
     def set_task(self, task_config):
-        self.transition_matrix = task_config["transition"]
-        self.reward_matrix = task_config["reward"]
-        self.reward_noise = task_config["reward_noise"]
-        self.reward_noise_type = task_config["reward_noise_type"]
-        self.state_mapping = task_config["state_mapping"]
-        self.reset_triggers = task_config["reset_triggers"]
-        self.reset_states = task_config["reset_states"]
-        self.n_states = task_config["state_space"]
-        self.n_actions = task_config["action_space"]
-
-        if("max_steps" in task_config):
-            self.max_steps = task_config["max_steps"]
+        for k,v in task_config.items():
+            setattr(self, k, v)
 
         ns1, na1, ns2 = self.transition_matrix.shape
         ns3, na2, ns4 = self.reward_matrix.shape
@@ -43,8 +33,8 @@ class AnyMDPEnv(gym.Env):
         assert ns1 > 0, "State space must be at least 1"
         assert na1 > 1, "Action space must be at least 2"
 
-        self.observation_space = spaces.Discrete(self.n_states)
-        self.action_space = spaces.Discrete(self.n_actions)
+        self.observation_space = spaces.Discrete(self.ns)
+        self.action_space = spaces.Discrete(self.na)
 
         self.task_set = True
         self.need_reset = True
@@ -57,41 +47,34 @@ class AnyMDPEnv(gym.Env):
         self.need_reset = False
         random.seed(pseudo_random_seed())
 
-        self._state = numpy.random.choice(len(self.reset_states),
+        self._state = numpy.random.choice(len(self.s_0),
                                           replace=True,
-                                          p=self.reset_states)
+                                          p=self.s_0_prob)
         return self.state_mapping[self._state], {"steps": self.steps}
 
     def step(self, action):
         if(self.need_reset or not self.task_set):
             raise Exception("Must \"set_task\" and \"reset\" before doing any actions")
-        assert action < self.n_actions, "Action must be less than the number of actions"
-        transition_gt = self.transition_matrix[self._state, action]
+        assert action < self.na, "Action must be less than the number of actions"
+        transition_gt = self.transition[self._state, action]
 
         next_state = random.choice(len(self.state_mapping), p=transition_gt)
 
         reward_gt = self.reward_matrix[self._state, action, next_state]
         reward_gt_noise = self.reward_noise[self._state, action, next_state]
 
-        if(self.reward_noise_type == 'normal'):
-            reward = random.normal(reward_gt, reward_gt_noise)
-        elif(self.reward_noise_type == 'binomial'):
-            if(reward_gt > 0):
-                reward = float(random.binomial(1, reward_gt))
-            else:
-                reward = - float(random.binomial(1, abs(reward_gt)))
+        reward = random.normal(reward_gt, reward_gt_noise)
 
         info = {"steps": self.steps, "reward_gt": reward_gt}
 
-        if(self.state_mapping.ndim == 1):
-            transition_ext_gt = numpy.zeros((self.n_states,))
-            for i,s in enumerate(self.state_mapping):
-                transition_ext_gt[s] = transition_gt[i]
-            info["transition_gt"] = transition_ext_gt
+        transition_observed_gt = numpy.zeros((self.ns,))
+        for i,s in enumerate(self.state_mapping):
+            transition_observed_gt[s] = transition_gt[i]
+        info["transition_gt"] = transition_observed_gt
 
         self.steps += 1
         self._state = next_state
-        terminated = self.reset_triggers[self._state]
+        terminated = (self._state in self.s_e)
         truncated = self.steps >= self.max_steps
         if(terminated or truncated):
             self.need_reset = True
@@ -104,18 +87,3 @@ class AnyMDPEnv(gym.Env):
     @property
     def inner_state(self):
         return self._state
-
-class AnyMDPEnvD2C(AnyMDPEnv):
-    """
-    Transfer a AnyMDPEnv to Continuous State Space without resampling a task
-    """
-    def __init__(self, max_steps, state_dim):
-        super().__init__(max_steps)
-        self.observation_space = spaces.Box(0., 1., shape=(state_dim,))
-        self.state_dim = state_dim
-
-    def set_task(self, task_config):
-        super().set_task(task_config)
-        n_inner_states = self.state_mapping.shape[0]
-        self.state_mapping = numpy.random.normal(size=(n_inner_states, self.state_dim))
-        self.observation_space = spaces.Box(0., 1., shape=(self.state_dim,))

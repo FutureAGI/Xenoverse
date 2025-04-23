@@ -3,40 +3,13 @@ if __name__=="__main__":
     import numpy
     import xenoverse.anymdp
     from xenoverse.anymdp import  AnyMDPSolverOpt, AnyMDPSolverOTS, AnyMDPSolverQ, AnyMDPTaskSampler
-    from xenoverse.anymdp.solver import task_diameter
 
-    task = AnyMDPTaskSampler(state_space=16, 
+    task = AnyMDPTaskSampler(state_space=128, 
                              action_space=5,
                              min_state_space=16,
-                             transition_check_type=1,
                              verbose=True)
-    print("task diameter:", task_diameter(task))
-    print("transition:", task["transition"])
     max_steps = 32000
     prt_freq = 1000
-
-    # Test D2C Random Policy
-    env = gym.make("anymdp-v0")
-    env.set_task(task)
-
-    # Test Random Policy
-    state, info = env.reset()
-    acc_reward = 0
-    epoch_reward = 0
-
-    steps = 0
-    while steps < max_steps:
-        action = env.action_space.sample()
-        state, reward, terminated, truncated, info = env.step(action)
-        acc_reward += reward
-        epoch_reward += reward
-        steps += 1
-        if(steps % prt_freq == 0 and steps > 0):
-            print("Step:{}\tEpoch Reward: {}".format(steps, epoch_reward))
-            epoch_reward = 0
-        if(terminated or truncated):
-            state, info = env.reset()
-    print("D2C Random Policy Summary: {}".format(acc_reward))
 
     # Test Random Policy
     env = gym.make("anymdp-v0")

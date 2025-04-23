@@ -5,295 +5,251 @@ import numpy
 from numpy import random
 from copy import deepcopy
 from xenoverse.utils import pseudo_random_seed
-from xenoverse.anymdp.solver import check_task_trans, check_task_rewards
+from xenoverse.anymdp.solver import check_valuefunction
+from xenoverse.utils import RandomFourier
 
+eps = 1e-10
 
-def reward_sampler_sas(state_space:int, 
-                   action_space:int, 
-                   reward_sparsity:float=0.25,
-                   exp_positive_ratio:float=0.10,
-                   reward_noise_max:float=0.30):
-    reward_mask = numpy.zeros((state_space,))
-    reward_sparsity = min(reward_sparsity * random.exponential(1.0), 1.0)
-    reward_mask = random.binomial(1, reward_sparsity, size=(state_space,))
-    reward_noise_mask = random.binomial(1, reward_sparsity, size=(state_space,))
-    reward_noise = reward_noise_mask * reward_noise_max  * random.random() * random.rand(state_space)
+def sample_mdp(state_number, na,
+              s0_range=3, verbose=False):
+    task = dict()
+    assert state_number >=8, "state_number must be at least 8 for MDP"
 
-    positive_ratio = min(exp_positive_ratio * random.exponential(1.0), 1.0)
-    sign_mask = 2.0 * random.binomial(1, positive_ratio, size=(state_space,)) - 1
-    reward_matrix = numpy.abs(random.normal(loc=0, scale=1.0, size=(state_space,))) * reward_mask * sign_mask
-    return reward_matrix, reward_noise
-
-def comb_sampler(n):
-    # 生成范围[0, 2^n -1]，确保均匀性
-    num = random.randint(0, 2 ** n - 1)
-    # 使用 [2:] 仅移除 '0b' 前缀，保留所有有效位
-    comb_type = bin(num)[2:]
-    # 补零或截断至 n 位
-    if len(comb_type) < n:
-        comb_type = '0' * (n - len(comb_type)) + comb_type
+    # sample S_0
+    assert s0_range > 0
+    if(s0_range < 2):
+        s_0_prob = numpy.array([1.0], dtype=int)
+        s_0 = [0]
     else:
-        comb_type = comb_type[-n:]
-    return comb_type
-
-def reward_sampler(task:dict,
-                   state_space:int, 
-                   action_space:int,
-                   reward_noise_choice:list):
-
-    if("reset_triggers_positive" not in task):
-        return {}
-
-    reward_scale = random.uniform(0.01, 0.10) # Scale the reward noise
-    reward_noise_type =  random.choice(reward_noise_choice)
-
-    if(state_space < 2):
-        reward_matrix = numpy.random.random((1, action_space, 1)) * reward_scale
-        reward_noise = 0.3 * numpy.random.random((1, action_space, 1)) * reward_scale
-        return {"reward": reward_matrix,
-                "reward_noise": reward_noise,
-                "reward_noise_type": reward_noise_type}
-
-    # Sample Pitfalls
-    v_scale = random.uniform(10, 100) * reward_scale
-    rewards_neg = - numpy.random.random(size=[state_space]) * v_scale \
-        * task["reset_triggers_negative"]
-    # Sample Sucesses
-    rewards_pos = task["reset_triggers_positive"] * \
-        numpy.clip(
-            numpy.random.exponential(scale=v_scale,
-            size=state_space), v_scale, None)
-
-    # Crucial Rewards
-    rewards = rewards_neg + rewards_pos
-
-    # Reshape the reward to ns, na, ns
-    reward_matrix = numpy.zeros((state_space, action_space, state_space))
-    reward_noise = numpy.zeros((state_space, action_space, state_space))
-
-    reward_matrix += rewards[None, None, :]
-    reward_is_crucial = (numpy.abs(rewards) > 1.0e-6)
-    reward_noise_factor = v_scale * random.random()
-    reward_noise += reward_noise_factor * (numpy.random.random(size=[state_space]) * reward_is_crucial.astype(float))[None, None, :]
-    crucial_index = numpy.where(reward_is_crucial)
-
-    reward_type=comb_sampler(3)
-    if(reward_type[0] == '1'): # Add random -s reward
-        rm, rn = reward_sampler_sas(state_space, action_space)
-        rm[crucial_index] = 0.0 # Make sure the reset triggers are not rewarded
-        rn[crucial_index] = 0.0 # Make sure the reset triggers are not rewarded
-        reward_matrix += random.exponential(0.10) * reward_scale * rm[None, None, :]
-        reward_noise  += random.exponential(0.10) * reward_scale * rn[None, None, :]
-    if(reward_type[1] == '1'): # Add random a reward
-        reward_matrix += random.exponential(0.01) * reward_scale * (numpy.random.random((1, action_space, 1)) - 0.5)
-    if(reward_type[2] == '1'): # Add a random s-s reward
-        ndim = task["state_embedding"].shape[1]
-        r_direction = numpy.random.random((1, ndim)) # Sample a random reward direction
-        r_direction /= numpy.linalg.norm(r_direction)
-        r_direction = r_direction * task["state_embedding"]
-        r_direction *= random.random() * reward_scale
-        r_direction = numpy.sum(r_direction, axis=1)
-        reward_matrix += r_direction[None, None, :] - r_direction[:, None, None]
-
-    if(numpy.max(reward_matrix) > 1.01 or numpy.min(reward_matrix) < -1.01):
-        reward_noise_type = 'normal'
-    else:
-        reward_matrix = numpy.clip(reward_matrix, -1.0, 1.0)
-
-    return {"reward": reward_matrix,
-            "reward_noise": reward_noise,
-            "reward_noise_type": reward_noise_type}
-
-def transition_sampler(state_space:int, 
-                    action_space:int, 
-                    min_state_space:int, 
-                    transition_diversity:int):
-        
-        # Sample a subset of states
-        if(min_state_space is None):
-            min_state_space = state_space
-        else:
-            min_state_space = min(min_state_space, state_space)
-        sample_state_space = random.randint(min_state_space, state_space + 1)        
-        state_mapping = numpy.random.permutation(state_space)[:sample_state_space]
-
-        if(state_space < 1):
-            raise ValueError("State space must be at least 1")
-
-        if(state_space < 2):
-            return {"state_mapping": state_mapping,
-                    "reset_triggers": numpy.zeros((1,)),
-                    "reset_states": numpy.ones((1,)),
-                    "transition": numpy.ones((1, action_space, 1)),
-                    "reset_triggers_negative": None,
-                    "reset_triggers_positive": None,
-                    "state_embedding": None}
+        while (numpy.sum(s_0_prob) < eps):
+            s_0_prob = numpy.clip(random.normal(loc=0, scale=1, size=(s0_range)), 0, None)
+        s_0 = numpy.where(s_0_prob > eps)[0]
+        s_0_prob = s_0_prob[s_0]
+        s_0_prob = s_0_prob / numpy.sum(s_0_prob)
+    task.update({"s_0": numpy.copy(s_0),
+                 "s_0_prob": numpy.copy(s_0_prob)})
     
-        eps = 1e-3
+    # sample S_E
+    p_s_e_base = numpy.random.uniform(0, 0.5) # 50% pitfalls at maximum
+    s_e = numpy.random.choice([0, 1], size=state_number, p=[1 - p_s_e_base, p_s_e_base])
+    s_e[s_0] = 0 # make sure S_0 do not reset
+    if(random.random() < 0.5): # with 50% probability the last state is goal
+        s_e[-1] = 1
+        final_goal = True
+    else:
+        s_e[-1] = 0
+        final_goal = False
+    task.update({"s_e": numpy.where(s_e == 1)[0]})
 
-        # Now sample dimension of the tasks
-        ndim = random.randint(2, 8)
+    # sample transition s-s'
+    trans_ss = numpy.zeros((state_number, state_number), dtype=float)
+    max_leap = random.randint(2, min(state_number // 4, 6)) # from 2 to 6
+    ss_from = numpy.zeros(state_number, dtype=int)
+    ss_to = numpy.zeros(state_number, dtype=int)
+    for s in range(state_number):
+        if(s in s_e): continue
 
-        # Sample the location of states
-        loc_s = numpy.random.random((sample_state_space, ndim))
+        if(s > 2):
+            s_from = random.randint(0, s-1)  # start of the transition
+        else:
+            s_from = 0
+        s_to = random.randint(s + 1, s + max_leap) + 1 # end of the transition (exclusive)
 
-        # Sample the main axis length
-        max_axis_length = random.randint(2, sample_state_space)
-        loc_s[:, 0] *= max_axis_length
+        s_to = min(s_to, state_number)
 
-        # Sample positive reset trigger and reset states
-        iter = 0
-        max_iter = 10000
-        need_reset_trigger = (random.random() > 0.70) # 30% probability of not requiring reset triggers
-        reset_trigger_positive = numpy.zeros(sample_state_space)
-        reset_dist = numpy.zeros(sample_state_space)
-        while(((numpy.sum(reset_trigger_positive) < 1 and not need_reset_trigger)
-              or numpy.sum(reset_dist) < 1)
-              and iter < max_iter):
+        while(s_to < state_number):
+            valid_leap = False
+            for s_future in range(s + 1, s_to):
+                if(s_future not in s_e):
+                    valid_leap = True
+                    break
+            if(valid_leap):
+                break
+            s_to += 1
 
-            proc_s = loc_s[:, 0] / max_axis_length
-            max_proc_s = numpy.max(proc_s) - eps
-            min_proc_s = numpy.min(proc_s) + eps
-            max_proc_s_start = min(0.60, max_proc_s - 0.20)
-            min_proc_s_end  = max(0.40, min_proc_s + 0.20)
+        ss_from[s] = s_from
+        ss_to[s] = s_to
 
-            if(not need_reset_trigger):
-                positive_prob = numpy.clip(proc_s - random.uniform(max_proc_s_start, max_proc_s), 0.0, 1.0)
-                positive_prob *= max(1, 0.05 * random.random() * sample_state_space) / (numpy.sum(positive_prob) + eps) 
-                positive_prob = numpy.clip(positive_prob, 0.0, 1.0)
-                reset_trigger_positive = numpy.random.binomial(1, positive_prob)
+        trans_ss[s, s_from:s_to] = random.uniform(0, 1, size=(s_to - s_from))
+        trans_ss[s] = trans_ss[s] / numpy.sum(trans_ss[s])
 
-            # Sample the reset state distribution
-            reset_prob = numpy.clip(random.uniform(min_proc_s, min_proc_s_end) - proc_s, 0.0, 1.0)
-            reset_prob *= max(1, 0.05 * random.random() * sample_state_space) / (numpy.sum(reset_prob) + eps) 
-            reset_prob = numpy.clip(reset_prob, 0.0, 1.0)
-            if(numpy.sum(reset_prob) < 1):
-                reset_prob += eps
-            reset_dist = numpy.random.binomial(1, reset_prob).astype(float) * (1.0 - reset_trigger_positive) # Avoid resetting to triggers
+    # sample average rewards s-s'
 
-            # Sample negative reset trigger - Uniform distribution
-            # A upperbound of 20% of the state triggers reset
-            reset_trigger_negative = numpy.random.binomial(1, 
-                                            0.2 * random.random(), 
-                                            size=(sample_state_space,)) * \
-                                    (1.0 - reset_trigger_positive) * (1.0 - reset_dist)
+    # sample potential reward
+    potential_reward_generator = RandomFourier(ndim=1, 
+                                        max_order=5, 
+                                        max_item=3, 
+                                        max_steps=state_number * 2,
+                                        box_size=max(random.uniform(-5.0, 5.0), 0.0))
+    potential_reward = []
+    for s in range(state_number):
+        potential_reward.append(potential_reward_generator(s)[0])
+    potential_reward = numpy.array(potential_reward)
 
-            reset_trigger = reset_trigger_positive + reset_trigger_negative
+    # calculate potential cost
+    potential_cost = numpy.max(potential_reward[-1] - potential_reward[s_0])
 
-            iter += 1
+    # calculate point cost
+    # probability to achieve the states
+    achieve_probability = numpy.sum(trans_ss, axis=0)
 
-        if(iter >= max_iter):
-            raise RuntimeError("Failed to sample a valid task")
+    # award those hard to achieve
+    position_reward = numpy.zeros(state_number)
+    position_reward_noise = numpy.zeros(state_number)
+    base = random.exponential(1.0)
+    noise_base = numpy.clip(random.uniform(-0.30, 0.30), 0.0, None)
 
-        reset_dist = reset_dist / numpy.sum(reset_dist)
+    # award those hard to achieve
+    if(random.random() < 0.67):
+        for s in range(state_number):
+            if(s in s_e or s in s_0): continue
+            award_bar = random.uniform(0.05, 0.40)
+            punish_bar = random.uniform(0.80, 1.20)
+            if(achieve_probability[s] < award_bar):
+                position_reward[s] = random.uniform(0.5, 1.0) * base
+                position_reward_noise[s] = noise_base * position_reward[s]
+            elif(achieve_probability[s] > punish_bar): # those easy to achieve
+                position_reward[s] = - random.uniform(0.5, 1.0) * base
+                position_reward_noise[s] = - noise_base * position_reward[s]
 
-        # Sample a upper bound of the transition
-        adj_ub = random.randint(2, min(transition_diversity + 1, sample_state_space + 1))
+    # award the pitfalls
+    pitfalls_base = numpy.clip(random.uniform(-100.0, 10.0), None, 0.0)
+    for s in s_e:
+        if(s < state_number - 1): # not the final goal
+            position_reward[s] = pitfalls_base
+    
+    # sample step cost / survive award
+    if(random.random() < 0.33):
+        step_reward = 0.0
+    else:
+        if(final_goal):
+            step_reward = - random.exponential(0.10)
+        else:
+            step_reward = random.exponential(0.10)
 
-        # Calculate the distance between states
-        dist_s = numpy.linalg.norm(loc_s[None, :, :] - loc_s[:, None, :], axis=2)
+    # dynamic programming to find the cost
+    cur_cost = numpy.ones(state_number) * 1e10
+    cur_cost[s_0] = 0
+    active_queue = [s for s in s_0]
+    while(len(active_queue) > 0):
+        s = active_queue.pop(0)
+        for s_next in numpy.where(trans_ss[s] != 0)[0]:
+            new_cost = cur_cost[s] - min(position_reward[s_next], 0) - min(step_reward) # add the cost
+            if(new_cost < cur_cost[s_next]):
+                cur_cost[s_next] = new_cost
+                active_queue.append(s_next)
+    
+    final_cost = cur_cost[-1]
+    goal_cost = final_cost + potential_cost
 
-        neighbors = numpy.argsort(dist_s, axis=1)[:, :adj_ub]
-        # Calculate the minimum k distance between states from the neigbors
-        # Make sure to get rid of itself
-        avg_dist = numpy.mean(dist_s[numpy.arange(sample_state_space)[:, None], neighbors])
-
-        # Now sample action of transitions with shape [ns, na, ndim]
-        dir_s_a = numpy.random.randn(sample_state_space, action_space, ndim)
-        dir_s_a = dir_s_a / numpy.linalg.norm(dir_s_a, axis=2, keepdims=True)
-        dist_s_a = (1.0 + 2.0 * numpy.random.random(size=(sample_state_space, action_space))) * avg_dist
-        deta_s_a = dir_s_a * dist_s_a[:, :, None]
-
-        # Now calculate the target loc by projecting a with shape[ns, na, ndim]
-        target_s_a = deta_s_a + loc_s[:, None, :]
-
-        # Now caculate the state-action-state distance after taking action [ns, na, ns]
-        dist_s_a_s = numpy.linalg.norm(target_s_a[:, :, None, :] - loc_s[None, None, :, :], axis=3)
-        sigma = avg_dist * random.exponential(scale=1.0)
-
-        prob_s_a_s = numpy.exp(- (dist_s_a_s / sigma) ** 2)
-        # check and avoid the case where all the probability is 0
-        sum_prob_s_a_s_trivial = (numpy.sum(prob_s_a_s, axis=2) < eps)
-        while(sum_prob_s_a_s_trivial.any()):
-            for i_s, i_a in zip(*numpy.where(sum_prob_s_a_s_trivial)):
-                prob_s_a_s[i_s, i_a] *= 0
-                resample_prob = numpy.clip(numpy.random.normal(size=(adj_ub,)), 0.0, None)
-                for idx, j_s in enumerate(neighbors[i_s].tolist()):
-                    prob_s_a_s[i_s, i_a, j_s] = resample_prob[idx]
-                prob_s_a_s[i_s, i_a] = prob_s_a_s[i_s, i_a] / max(1.0e-6, numpy.sum(prob_s_a_s[i_s, i_a]))
-            sum_prob_s_a_s_trivial = (numpy.sum(prob_s_a_s, axis=2) < eps)
+    if(final_goal):
+        position_reward[-1] = random.uniform(1.5 * goal_cost, 4.0 * goal_cost)
+    else:
+        position_reward[-1] = max(random.uniform(2.0 * base, 10.0 * base),
+                                  2.0 * state_number * numpy.abs(step_reward))
         
-        transition_matrix = prob_s_a_s / numpy.sum(prob_s_a_s, axis=2, keepdims=True)
+    # now further decompose the transition
 
-        return {"state_mapping": state_mapping,
-                "reset_triggers": reset_trigger,
-                "reset_states": reset_dist,
-                "transition": transition_matrix,
-                "reset_triggers_negative": reset_trigger_negative,
-                "reset_triggers_positive": reset_trigger_positive,
-                "state_embedding": loc_s}
+    transition = numpy.zeros((state_number, na, state_number), dtype=float)
+
+    for s in range(state_number):
+        if(s in s_e): continue
+        a_center = random.uniform(ss_from[s], ss_to[s], size=na)
+
+        # na x ns dimension, representing the distance of the action to the corresponding state
+        a_dist = (a_center[:, None] - numpy.arange(ss_from[s], ss_to[s])[None, :]) ** 2
+        sigma = max(random.exponential(1.0), 0.5)
+        
+        a_prob = numpy.exp(-a_dist / sigma**2)
+
+        # now calculate the weight for each action
+        s_sum_prob = numpy.sum(a_prob, axis=0)
+
+        # in case some element of s_weight < eps, just find the nearest action
+        for i in numpy.where(s_sum_prob < eps)[0]:
+            a_prob[numpy.argmin(a_dist[:, i]), i] = 1.0
+
+        # normalize probability according to dimension na
+        a_prob = a_prob / numpy.sum(a=a_prob, axis=0)
+
+        transition[s, :, ss_from[s]:ss_to[s]] = a_prob * trans_ss[s:s+1, ss_from[s]:ss_to[s]]
+
+    # prepare the reward matrix
+    reward = numpy.zeros((state_number, na, state_number), dtype=float)
+    reward_noise = numpy.zeros((state_number, na, state_number), dtype=float)
+
+    reward += potential_reward[:, None, None] - potential_reward[None, None, :]
+    reward += position_reward[None, None, :]
+    reward += step_reward
+
+    sparsity = numpy.clip(numpy.random.uniform(-0.7, 0.3), 0, None)
+    if(sparsity > eps):
+        reward += (random.normal(size=(state_number, na)) * base * (numpy.random.rand(state_number, na) < sparsity).astype(float))[:, :, None]
+
+    reward_noise += position_reward_noise[None, None, :]
+
+    task.update({"transition": numpy.copy(transition),
+                 "reward": numpy.copy(reward),
+                 "reward_noise": numpy.copy(reward_noise)})
+
+    return task
+
+def sample_bandit(na):
+    base = random.exponential(1.0)
+    noise_base = numpy.clip(random.uniform(-0.30, 0.30), 0.0)
+    transition = numpy.zeros((1, na, 1), dtype=float)
+    reward = random.uniform(0.5 * base, base, size=(1, na, 1))
+    reward_noise = noise_base * reward
+    return {"transition": numpy.copy(transition),
+           "reward": numpy.copy(reward),
+           "reward_noise": numpy.copy(reward_noise),
+           "s_0": numpy.array([0]),
+           "s_e": numpy.array([]),
+           "s_0_prob": numpy.array([1.0])}
+
 
 def AnyMDPTaskSampler(state_space:int=128,
                  action_space:int=5,
                  min_state_space:int=None,
-                 epoch_state_visit:int=4,
-                 max_transition_diversity:int=8,
-                 max_sub_iteration:int=-1,
-                 transition_check_type:int=1,
-                 reward_noise_choice:list=['normal'],
                  seed=None,
-                 keep_metainfo=False,
                  verbose=False):
     # Sampling Transition Matrix and Reward Matrix based on Irwin-Hall Distribution and Gaussian Distribution
     if(seed is not None):
         random.seed(seed)
     else:
         random.seed(pseudo_random_seed())
+
+    assert(state_space >= 8 or state_space == 1),"State Space must be at least 8 or 1 (Multi-armed Bandit)!"
     
-    max_steps = max(int(numpy.random.exponential(epoch_state_visit * state_space)), epoch_state_visit * state_space)
+    if(state_space < 2):
+        max_steps = 1
+    else:
+        lower_bound = max(4.0 * state_space, 100)
+        upper_bound = min(15.0 * state_space, 1000)
+        max_steps = random.uniform(lower_bound, upper_bound)
+    
+    # Sample a subset of states
+    if(min_state_space is None):
+        min_state_space = state_space
+        real_state_space = state_space
+    else:
+        min_state_space = min(min_state_space, state_space)
+        assert(min_state_space >= 8), "Minimum State Space must be at least 8!"
+        real_state_space = random.randint(min_state_space, state_space + 1)
+    state_mapping = numpy.random.permutation(state_space)[:real_state_space]
 
     # Generate Transition Matrix While Check its Quality
-    task = {"state_space": state_space,
-            "action_space": action_space,
-            "max_steps": max_steps}
-
-    if(max_sub_iteration < 1):
-        max_sub_iteration = 10
+    task = {"ns": state_space,
+            "na": action_space,
+            "max_steps": max_steps,
+            "state_mapping": state_mapping}
     
-    check_trans_passed = False
-    check_value_passed = False
-    global_trans_steps = 0
-    global_value_steps = 0
-
-    while (not check_trans_passed or not check_value_passed):
-        check_trans_passed = False
-        check_value_passed = False
-        sub_step = 0
-        while(not check_trans_passed and sub_step < max_sub_iteration):
-            task.update(transition_sampler(state_space, 
-                                        action_space,
-                                        min_state_space,
-                                        max_transition_diversity))
-            check_trans_passed = check_task_trans(task, transition_check_type=transition_check_type)
-            sub_step += 1
-            global_trans_steps += 1
-
-        sub_step = 0
-        while(not check_value_passed and sub_step < max_sub_iteration):
-            task.update(reward_sampler(task,
-                                    task["state_mapping"].shape[0], 
-                                    action_space,
-                                    reward_noise_choice))
-            check_value_passed = check_task_rewards(task)
-            sub_step += 1
-            global_value_steps += 1
-
-    if(verbose):
-        print(f"Resample transitions {global_trans_steps} times,", f"Rsample rewards {global_value_steps} times,")
-
-    if(not keep_metainfo):
-        del task["state_embedding"]
-        del task["reset_triggers_positive"]
-        del task["reset_triggers_negative"]
+    while(True):
+        if(real_state_space == 1):
+            task.update(sample_bandit(action_space))
+        else:
+            task.update(sample_mdp(real_state_space, action_space, verbose))
+        if(check_valuefunction(task)):
+            break
 
     return task
