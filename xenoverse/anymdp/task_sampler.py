@@ -129,8 +129,7 @@ def transition_sampler(state_space:int,
                     "reset_triggers_positive": None,
                     "state_embedding": None}
     
-        # Sample the reset states
-        eps = 1e-6
+        eps = 1e-3
 
         # Now sample dimension of the tasks
         ndim = random.randint(2, 8)
@@ -194,8 +193,10 @@ def transition_sampler(state_space:int,
         # Calculate the distance between states
         dist_s = numpy.linalg.norm(loc_s[None, :, :] - loc_s[:, None, :], axis=2)
 
-        # Calculate the minimum k distance between states
-        avg_dist = numpy.mean(numpy.sort(dist_s, axis=1)[:, 1:adj_ub])
+        neighbors = numpy.argsort(dist_s, axis=1)[:, :adj_ub]
+        # Calculate the minimum k distance between states from the neigbors
+        # Make sure to get rid of itself
+        avg_dist = numpy.mean(dist_s[numpy.arange(sample_state_space)[:, None], neighbors])
 
         # Now sample action of transitions with shape [ns, na, ndim]
         dir_s_a = numpy.random.randn(sample_state_space, action_space, ndim)
@@ -214,28 +215,14 @@ def transition_sampler(state_space:int,
         # check and avoid the case where all the probability is 0
         sum_prob_s_a_s_trivial = (numpy.sum(prob_s_a_s, axis=2) < eps)
         while(sum_prob_s_a_s_trivial.any()):
-            sigma *= 2.0
             for i_s, i_a in zip(*numpy.where(sum_prob_s_a_s_trivial)):
-                prob_s_a_s[i_s] = numpy.exp(- (dist_s_a_s[i_s] / sigma) ** 2)
+                prob_s_a_s[i_s, i_a] *= 0
+                resample_prob = numpy.clip(numpy.random.normal(size=(adj_ub,)), 0.0, None)
+                for idx, j_s in enumerate(neighbors[i_s].tolist()):
+                    prob_s_a_s[i_s, i_a, j_s] = resample_prob[idx]
+                prob_s_a_s[i_s, i_a] = prob_s_a_s[i_s, i_a] / max(1.0e-6, numpy.sum(prob_s_a_s[i_s, i_a]))
             sum_prob_s_a_s_trivial = (numpy.sum(prob_s_a_s, axis=2) < eps)
-
-        # Now sample the transition by masking the state-action-state distance
-        dist_s_a_s_index = numpy.argsort(dist_s_a_s, axis=2)[:, :, :adj_ub]
-
-        extra_mask = numpy.random.choice([0, 1], size=dist_s_a_s_index.shape)
-        extra_mask_sum = extra_mask.sum(axis=2)
-        extra_mask_zero = numpy.where(extra_mask_sum == 0)
-
-        for idx in zip(*extra_mask_zero):
-            extra_mask[idx[0], idx[1], numpy.random.randint(adj_ub)] = 1
-        dist_s_a_s_index = dist_s_a_s_index * extra_mask - (1 - extra_mask)
-
-        # Set the distance beyond n_s_a to inf
-        bool_arr = numpy.zeros_like(dist_s_a_s, dtype=bool)
-        for i in range(adj_ub):
-            bool_arr |= (dist_s_a_s_index[:, :, i][:, :, None] == numpy.arange(sample_state_space)[None, None, :])
         
-        prob_s_a_s[bool_arr==False] = 0.0
         transition_matrix = prob_s_a_s / numpy.sum(prob_s_a_s, axis=2, keepdims=True)
 
         return {"state_mapping": state_mapping,

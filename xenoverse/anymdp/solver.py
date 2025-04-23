@@ -45,6 +45,53 @@ def mean_spearmanr(X, Y):
         return 1.0
     return mean_coeff
 
+def normalized_mrr(scores1, scores2, k=None):
+    assert numpy.shape(scores1) == numpy.shape(scores2)
+    n = numpy.shape(scores1)[0]
+
+    if k is None:
+        k = n
+    else:
+        k = min(k, n)
+
+    indices1 = np.argsort(-scores1)
+    indices2 = np.argsort(-scores2)
+    indices1_rev = indices1[::-1]
+
+    ranks = np.zeros(n)
+    for i, idx in enumerate(indices2):
+        ranks[idx] = i + 1
+
+    invranks = np.zeros(n)
+    for i, idx in enumerate(indices1_rev):
+        invranks[idx] = i + 1
+
+    mrrmax = 0.0
+    mrrmin = 0.0
+    mrr = 0.0
+
+    for i in range(k):
+        idx = indices1[i]
+        mrrmax += 1.0 / (i + 1) ** 2
+        mrrmin += 1.0 / ((i + 1) * invranks[idx])
+        mrr += 1.0 / ((i + 1) * ranks[idx])
+
+    return (mrr - mrrmin) / (mrrmax - mrrmin)
+    
+def mean_mrr(X, Y, k=None):
+    if X.shape != Y.shape:
+        raise ValueError("X and Y must have the same shape")
+    if(X.ndim == 1):
+        return normalized_mrr(X, Y, k)
+    nmrrs = []
+
+    for i in range(X.shape[0]):
+        x_col = X[i]
+        y_col = Y[i]
+        nmrr = normalized_mrr(x_col, y_col)
+        nmrrs.append(nmrr)
+    return numpy.mean(nmrrs)
+
 def task_diameter(task):
     return graph_diameter(task['transition'])
 
@@ -144,35 +191,28 @@ def check_valuefunction(t_mat, r_mat):
     vm_s = update_value_matrix(t_mat, r_mat, 0.50, numpy.zeros((ns, na), dtype=float), max_iteration=5)
     vm_r = update_value_matrix(t_mat, r_mat, 0.994, numpy.zeros((ns, na), dtype=float), max_iteration=5, is_greedy=False)
 
-    corr_ls_pi = mean_spearmanr(vm_l, vm_s)
-    corr_lr_pi = mean_spearmanr(vm_l, vm_r)
+    corr_ls_pi = mean_mrr(vm_l, vm_s, k=3) # ndcg@3
+    corr_lr_pi = mean_mrr(vm_l, vm_r, k=3) # ndcg@3
 
-    vm_l = numpy.max(vm_l, axis=1)
-    vm_r = numpy.max(vm_r, axis=1)
+    inter_s_std = numpy.std(vm_l)
+    intra_s_std = numpy.mean(numpy.std(vm_l, axis=1))
 
-    corr_lr = mean_spearmanr(vm_l, vm_r)
+    vm_l_max = numpy.max(vm_l, axis=1)
+    vm_s_max = numpy.max(vm_s, axis=1)
 
-    qstd = numpy.std(vm_l)
+    corr_ls = mean_spearmanr(vm_l_max, vm_s_max)
 
-    corr_pi_thres = 0.50
-    if(ns < 8):
-        corr_thres=0.95
-    elif(ns < 16):
-        corr_thres=0.90
-    elif(ns < 32):
-        corr_thres=0.70
-    elif(ns < 64):
-        corr_thres=0.60
-    else:
-        corr_thres=0.50
+    corr_thres=0.85
+    corr_ls_pi_thres=0.75
+    corr_lr_pi_thres=0.75
 
-    if(qstd < 0.01): # value function too flat
+    if(inter_s_std < 0.1 or intra_s_std < 0.1): # value function too flat
         return False
-    elif(corr_lr > corr_thres):
+    elif(corr_ls > corr_thres):
         return False
-    elif(corr_ls_pi > corr_pi_thres):
+    elif(corr_ls_pi > corr_ls_pi_thres):
         return False
-    elif(corr_lr_pi > corr_pi_thres):
+    elif(corr_lr_pi > corr_lr_pi_thres):
         return False
     
     return True

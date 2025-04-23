@@ -5,12 +5,13 @@ if __name__=="__main__":
     from xenoverse.anymdp import  AnyMDPSolverOpt, AnyMDPSolverOTS, AnyMDPSolverQ, AnyMDPTaskSampler
     from xenoverse.anymdp.solver import task_diameter
 
-    task = AnyMDPTaskSampler(state_space=128, 
-                             action_space=10,
-                             min_state_space=32,
+    task = AnyMDPTaskSampler(state_space=16, 
+                             action_space=5,
+                             min_state_space=16,
                              transition_check_type=1,
                              verbose=True)
     print("task diameter:", task_diameter(task))
+    print("transition:", task["transition"])
     max_steps = 32000
     prt_freq = 1000
 
@@ -81,7 +82,7 @@ if __name__=="__main__":
             epoch_steps.append(epoch_step)
             epoch_step = 0
             state_list = []
-    print("Optimal Solver Summary:  {}, Averge Length: {}".format(acc_reward, numpy.mean(epoch_steps)))
+    print("Optimal Solver Summary:  {}, Averge Length: {}, Value Matrix: {}".format(acc_reward, numpy.mean(epoch_steps), solver.value_matrix))
 
     # Test AnyMDPSolverQ
     solver = AnyMDPSolverQ(env)
