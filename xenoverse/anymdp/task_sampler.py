@@ -21,6 +21,7 @@ def sample_mdp(state_number, na,
         s_0_prob = numpy.array([1.0], dtype=int)
         s_0 = [0]
     else:
+        s_0_prob = 0.0
         while (numpy.sum(s_0_prob) < eps):
             s_0_prob = numpy.clip(random.normal(loc=0, scale=1, size=(s0_range)), 0, None)
         s_0 = numpy.where(s_0_prob > eps)[0]
@@ -160,7 +161,7 @@ def sample_mdp(state_number, na,
 
         # na x ns dimension, representing the distance of the action to the corresponding state
         a_dist = (a_center[:, None] - numpy.arange(ss_from[s], ss_to[s])[None, :]) ** 2
-        sigma = max(random.exponential(1.0), 0.5)
+        sigma = numpy.clip(random.exponential(1.0), 0.20, 2.0)
         
         a_prob = numpy.exp(-a_dist / sigma**2)
 
@@ -261,7 +262,7 @@ def AnyMDPTaskSampler(state_space:int=128,
             task.update(sample_bandit(action_space))
             break
         else:
-            task.update(sample_mdp(real_state_space, action_space, verbose))
+            task.update(sample_mdp(real_state_space, action_space, verbose=verbose))
             if(check_valuefunction(task, verbose=verbose)):
                 break
 

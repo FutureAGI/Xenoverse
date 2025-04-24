@@ -32,6 +32,17 @@ class AnyMDPEnv(gym.Env):
         self.observation_space = spaces.Discrete(self.ns)
         self.action_space = spaces.Discrete(self.na)
 
+        # check transition matrix is valid
+        t_mat_sum = numpy.sum(self.transition, axis=-1)
+        error = (t_mat_sum - 1.0)**2
+        error[self.s_e] = 0.0
+        if((error >= 1.0e-6).any()):
+            raise Exception(f'Transition Matrix Sum != 1 at {numpy.where(error>=1.0e-6)}')
+        # check if there is any state that is both start and end
+        intersection = numpy.intersect1d(self.s_0, self.s_e)
+        if(len(intersection) > 0):
+            raise Exception(f'State {intersection} is {self.s_0} and {self.s_e}')
+
         self.task_set = True
         self.need_reset = True
 
@@ -43,18 +54,15 @@ class AnyMDPEnv(gym.Env):
         self.need_reset = False
         random.seed(pseudo_random_seed())
 
-        self._state = numpy.random.choice(len(self.s_0),
-                                          replace=True,
-                                          p=self.s_0_prob)
+        self._state = numpy.random.choice(self.s_0, p=self.s_0_prob)
         return self.state_mapping[self._state], {"steps": self.steps}
 
     def step(self, action):
         if(self.need_reset or not self.task_set):
             raise Exception("Must \"set_task\" and \"reset\" before doing any actions")
         assert action < self.na, "Action must be less than the number of actions"
-        transition_gt = self.transition[self._state, action]
+        transition_gt = numpy.copy(self.transition[self._state, action])
         next_state = random.choice(len(self.state_mapping), p=transition_gt)
-
         reward_gt = self.reward[self._state, action, next_state]
         reward_gt_noise = self.reward_noise[self._state, action, next_state]
 

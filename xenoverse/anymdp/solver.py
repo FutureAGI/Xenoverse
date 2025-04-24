@@ -5,6 +5,7 @@ from numba import njit
 import networkx as nx
 import scipy.stats as stats
 from scipy.stats import spearmanr
+from copy import deepcopy
 
 def normalized_mrr(scores1, scores2, k=None):
     assert numpy.shape(scores1) == numpy.shape(scores2)
@@ -84,18 +85,25 @@ def get_opt_trajectory_dist(s0, s0_prob, se, ns, na, transition, vm, K=8):
     max_trans = transition[i_indices, a_max[:, None], j_indices]
     for s in se:
         max_trans[s, s0] = s0_prob # s_e directly lead to s0
+
     for _ in range(K):
         max_trans = numpy.matmul(max_trans, max_trans)
-    stable_prob = max_trans[s0] + 1.0e-12 # calculation safety
-    gini_impurity = 1.0 - numpy.sum(stable_prob * stable_prob)
-    normal_entropy = -numpy.sum(stable_prob * numpy.log(stable_prob)) / numpy.log(ns)
+    
+    gini_impurity = []
+    normal_entropy = []
+
+    for s in s0:
+        stable_prob = max_trans[s] + 1.0e-12 # calculation safety
+        gini_impurity.append(1.0 - numpy.sum(stable_prob * stable_prob))
+        normal_entropy.append(-numpy.sum(stable_prob * numpy.log(stable_prob)) / numpy.log(ns))
+
     # Check gini impurity
-    return gini_impurity, normal_entropy
-        
+    return numpy.min(gini_impurity), numpy.min(normal_entropy)
 
 def check_valuefunction(task, verbose=False):
-    t_mat = task["transition"]
-    r_mat = task["reward"]
+    t_mat = numpy.copy(task["transition"])
+
+    r_mat = numpy.copy(task["reward"])
     ns, na, _ = t_mat.shape
     gamma = numpy.power(2, -1.0 / ns)
     vm_opt = update_value_matrix(t_mat, r_mat, gamma, numpy.zeros((ns, na), dtype=float), is_greedy=True)
@@ -117,14 +125,23 @@ def check_valuefunction(task, verbose=False):
         vm_diffs.append(vm_diff)
         
     # check the stationary distribution of the optimal value function
-    K = int(numpy.log2(task["max_steps"]))
-    gini, ent = get_opt_trajectory_dist(task["s_0"], 
-                            task["s_0_prob"],
-                            task["s_e"], 
+    K = int(numpy.log2(task["max_steps"])) + 1
+    gini, ent = get_opt_trajectory_dist(
+                            deepcopy(task["s_0"]), 
+                            numpy.copy(task["s_0_prob"]),
+                            deepcopy(task["s_e"]), 
                             ns, na, 
-                            t_mat, 
+                            numpy.copy(t_mat), 
                             vm_opt, 
                             K=K)
+    
+    t_mat_sum = numpy.sum(t_mat, axis=-1)
+    error = (t_mat_sum - 1.0)**2
+    error[task["s_e"]] = 0.0
+    if((error >= 1.0e-6).any()):
+        if(verbose):
+            print("Transition Matrix Error: ", numpy.where(error>=1.0e-6))
+        return False
     
     vm_diffs = numpy.mean(vm_diffs)
     if(verbose):
