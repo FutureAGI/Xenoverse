@@ -10,14 +10,12 @@ class AnyMDPSolverOpt(object):
     Suppose to know the ground truth of the environment
     """
     def __init__(self, env, gamma=0.99):
-        if(not env.task_set):
-            raise Exception("AnyMDPEnv is not initialized by 'set_task', must call set_task first")
-        self.n_actions = env.action_space.n
-        self.n_states = env.observation_space.n
+        self.na = env.action_space.n
+        self.ns = env.observation_space.n
         self.transition_matrix = env.transition
         self.reward_matrix = env.reward
         self.state_mapping = env.state_mapping
-        self.value_matrix = numpy.zeros((self.n_states, self.n_actions))
+        self.value_matrix = numpy.zeros((self.ns, self.na))
         self.gamma = gamma
         self.inverse_state_mapping = dict()
         for i,state in enumerate(self.state_mapping):

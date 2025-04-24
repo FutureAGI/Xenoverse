@@ -15,8 +15,6 @@ class AnyMDPSolverOTS(object):
         The exploration strategy is controlled by UCB-H with c as its hyperparameter. Increasing c will encourage exploration
         Simulation of the ideal policy when the ground truth is not known
         """
-        if(not env.task_set):
-            raise Exception("AnyMDPEnv is not initialized by 'set_task', must call set_task first")
         self.na = env.action_space.n
         self.ns = env.observation_space.n
        
@@ -58,11 +56,11 @@ class AnyMDPSolverOTS(object):
         else:
             est_value = self.est_r[s,a]
         self.value_matrix[s,a] += self.alpha * (est_value - self.value_matrix[s,a])
-
+        self.value_std = numpy.clip(numpy.std(self.value_matrix, axis=-1), 0.10, None)
 
     def policy(self, state):
         # Apply UCB with dynamic noise (Thompson Sampling)
         values = self._c * numpy.sqrt(numpy.log(self.max_steps + 1) / numpy.clip(self.est_r_cnt[state], 1.0, None)) * \
-                numpy.maximum(numpy.random.randn(self.na), 0) + \
+                numpy.maximum(numpy.random.randn(self.na), 0) * self.value_std[state] + \
                 self.value_matrix[state]
         return numpy.argmax(values)
