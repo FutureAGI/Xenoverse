@@ -206,7 +206,7 @@ def sample_mdp(state_number, na,
     return task
 
 def sample_bandit(na):
-    base = random.exponential(1.0)
+    base = numpy.clip(random.exponential(1.0), 0.05, 2.0)
     noise_base = numpy.clip(random.uniform(-0.30, 0.30), 0.0, None)
     transition = numpy.ones((1, na, 1), dtype=float)
     while True:
