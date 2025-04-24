@@ -103,7 +103,7 @@ def sample_mdp(state_number, na,
     # add state-dependent reward
     position_reward = numpy.zeros(state_number)
     position_reward_noise = numpy.zeros(state_number)
-    position_reward_base = random.exponential(5.0)
+    position_reward_base = random.exponential(1.0)
     position_reward_noise_base  = numpy.clip(random.uniform(-0.30, 0.30), 0.0, None)
 
     # award those at the last part
@@ -125,9 +125,9 @@ def sample_mdp(state_number, na,
     if(random.random() < 0.2):
         pitfalls_reward_base = 0
     elif(random.random() < 0.60):
-        pitfalls_reward_base = - random.exponential(1.0)
+        pitfalls_reward_base = - random.exponential(0.20)
     else:
-        pitfalls_reward_base = - random.exponential(10.0)
+        pitfalls_reward_base = - random.exponential(2.0)
 
     for s in s_e:
         if(s < state_number - 1): # not the final goal
@@ -138,11 +138,11 @@ def sample_mdp(state_number, na,
         step_reward = 0.0
     else:
         if(final_goal):
-            step_reward = - random.exponential(0.10)
+            step_reward = - random.exponential(0.02)
         else:
-            step_reward = random.exponential(0.10)
+            step_reward = random.exponential(0.02)
     
-    goal_cost = max(potential_cost, 0) + max(random.exponential(1.0), 0.25)
+    goal_cost = max(potential_cost, 0) + max(random.exponential(0.20), 0.05)
     
     if(final_goal):
         position_reward[-1] = random.uniform(4.0 * goal_cost, 10.0 * goal_cost)
@@ -183,7 +183,7 @@ def sample_mdp(state_number, na,
     # prepare the reward matrix
     reward = numpy.zeros((state_number, na, state_number), dtype=float)
     reward_noise = numpy.zeros((state_number, na, state_number), dtype=float)
-    rnd_reward_base = numpy.clip(random.exponential(0.25), 0.0, 0.50)
+    rnd_reward_base = numpy.clip(random.exponential(0.05), 0.0, 0.10)
 
     reward += potential_reward[:, None, None] - potential_reward[None, None, :]
     reward += position_reward[None, None, :]

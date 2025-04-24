@@ -30,7 +30,7 @@ class AnyMDPSolverOTS(object):
         self.est_r_global_avg = 0
         self.est_r_global_cnt = 0
         self.alpha = alpha
-
+        self.value_std = numpy.full(self.ns, 0.10)
 
     def learner(self, s, a, ns, r, done):
         # Update the environment model estimation

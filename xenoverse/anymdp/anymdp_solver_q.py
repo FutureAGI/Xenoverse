@@ -19,6 +19,7 @@ class AnyMDPSolverQ(object):
         self.alpha = alpha
         self.max_steps = max_steps
         self._c = c / (1.0 - self.gamma)
+        self.value_std = numpy.full(self.ns, 0.10)
 
 
     def learner(self, s, a, ns, r, done):
