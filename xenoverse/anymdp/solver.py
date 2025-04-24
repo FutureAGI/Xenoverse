@@ -76,16 +76,56 @@ def update_value_matrix(t_mat, r_mat, gamma, vm, max_iteration=-1, is_greedy=Tru
                 cur_vm[s,a] = numpy.dot(r_mat[s,a], t_mat[s,a]) + gamma * exp_q
         diff = numpy.sqrt(numpy.mean((old_vm - cur_vm)**2))
     return cur_vm
-    
-def check_valuefunction(task):
+
+def get_opt_trajectory_dist(s0, s0_prob, se, ns, na, transition, vm, K=8):
+    a_max = numpy.argmax(vm, axis=1)
+    i_indices = np.arange(ns)[:, None]
+    j_indices = np.arange(ns)
+    max_trans = transition[i_indices, a_max[:, None], j_indices]
+    for s in se:
+        max_trans[s, s0] = s0_prob # s_e directly lead to s0
+    for _ in range(K):
+        max_trans = numpy.matmul(max_trans, max_trans)
+    stable_prob = max_trans[s0] + 1.0e-12 # calculation safety
+    gini_impurity = 1.0 - numpy.sum(stable_prob * stable_prob)
+    normal_entropy = -numpy.sum(stable_prob * numpy.log(stable_prob)) / numpy.log(ns)
+    # Check gini impurity
+    return gini_impurity, normal_entropy
+        
+
+def check_valuefunction(task, verbose=False):
     t_mat = task["transition"]
     r_mat = task["reward"]
     ns, na, _ = t_mat.shape
-    gamma = 0.994
+    gamma = numpy.power(2, -1.0 / ns)
     vm_opt = update_value_matrix(t_mat, r_mat, gamma, numpy.zeros((ns, na), dtype=float), is_greedy=True)
     vm_rnd = update_value_matrix(t_mat, r_mat, gamma, numpy.zeros((ns, na), dtype=float), is_greedy=False)
-    print(vm_opt, vm_rnd)
+
+    vm_wht = numpy.ones((ns, ), dtype=int)
+    vm_wht[task["s_e"]] = 0
+    vm_rnd_std = numpy.std(vm_rnd[numpy.where(vm_wht>0)])
+
+    # Get Average Reward
+    avg_vm_opt = vm_opt * (1.0 - gamma) * task["max_steps"]
+    avg_vm_rnd = vm_rnd * (1.0 - gamma) * task["max_steps"]
+    vm_diffs = []
+
     for s in task["s_0"]:
-        if(numpy.max(vm_opt[s]) - numpy.max(vm_rnd[s]) < 0.01):
+        vm_diff = numpy.max(avg_vm_opt[s]) - numpy.max(avg_vm_rnd[s])
+        if(vm_diff < (0.10 * vm_rnd_std + 0.01)):
             return False
-    return True
+        vm_diffs.append(vm_diff)
+        
+    # check the stationary distribution of the optimal value function
+    gini, ent = get_opt_trajectory_dist(task["s_0"], 
+                            task["s_0_prob"],
+                            task["s_e"], 
+                            ns, na, 
+                            t_mat, 
+                            vm_opt, 
+                            K=10)
+    
+    vm_diffs = numpy.mean(vm_diffs)
+    if(verbose):
+        print("Value Diff: {:.4f}, Gini Impurity: {:.4f}, Normalized Entropy: {:.4f}, final_goal_terminate: {}".format(vm_diffs, gini,ent, task["final_goal_terminate"]))
+    return gini > 0.7 and ent > 0.5

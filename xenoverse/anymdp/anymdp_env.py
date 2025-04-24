@@ -23,15 +23,11 @@ class AnyMDPEnv(gym.Env):
         for k,v in task_config.items():
             setattr(self, k, v)
 
-        ns1, na1, ns2 = self.transition_matrix.shape
-        ns3, na2, ns4 = self.reward_matrix.shape
+        assert self.transition.shape == self.reward.shape
+        assert self.transition.shape[0] == self.ns and self.transition.shape[1] == self.na
 
-        assert ns1 == ns2 and ns2 == ns3 and ns3==ns4, \
-            "Transition matrix and reward matrix must have the same number of states"
-        assert na1 == na2, \
-            "Transition matrix and reward matrix must have the same number of actions"
-        assert ns1 > 0, "State space must be at least 1"
-        assert na1 > 1, "Action space must be at least 2"
+        assert self.ns > 0, "State space must be at least 1"
+        assert self.na > 1, "Action space must be at least 2"
 
         self.observation_space = spaces.Discrete(self.ns)
         self.action_space = spaces.Discrete(self.na)
@@ -57,10 +53,9 @@ class AnyMDPEnv(gym.Env):
             raise Exception("Must \"set_task\" and \"reset\" before doing any actions")
         assert action < self.na, "Action must be less than the number of actions"
         transition_gt = self.transition[self._state, action]
-
         next_state = random.choice(len(self.state_mapping), p=transition_gt)
 
-        reward_gt = self.reward_matrix[self._state, action, next_state]
+        reward_gt = self.reward[self._state, action, next_state]
         reward_gt_noise = self.reward_noise[self._state, action, next_state]
 
         reward = random.normal(reward_gt, reward_gt_noise)

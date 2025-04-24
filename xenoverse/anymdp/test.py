@@ -4,9 +4,9 @@ if __name__=="__main__":
     import xenoverse.anymdp
     from xenoverse.anymdp import  AnyMDPSolverOpt, AnyMDPSolverOTS, AnyMDPSolverQ, AnyMDPTaskSampler
 
-    task = AnyMDPTaskSampler(state_space=128, 
+    task = AnyMDPTaskSampler(state_space=16, 
                              action_space=5,
-                             min_state_space=16,
+                             min_state_space=None,
                              verbose=True)
     max_steps = 32000
     prt_freq = 1000
@@ -40,9 +40,11 @@ if __name__=="__main__":
     steps = 0
     epoch_step = 0
     epoch_steps = []
+    epoch_trajectory = [int(state)]
     while steps < max_steps:
-        action = solver.policy(state)
+        action = solver.policy(int(state))
         state, reward, terminated, truncated, info = env.step(action)
+        epoch_trajectory.append(int(state))
         acc_reward += reward
         epoch_reward += reward
         steps += 1
@@ -52,10 +54,11 @@ if __name__=="__main__":
             epoch_reward = 0
         if(terminated or truncated):
             state, info = env.reset()
+            epoch_trajectory.append(int(state))
             epoch_steps.append(epoch_step)
             epoch_step = 0
             state_list = []
-    print("Optimal Solver Summary:  {}, Averge Length: {}, Value Matrix: {}".format(acc_reward, numpy.mean(epoch_steps), solver.value_matrix))
+    print("Optimal Solver Summary:  {}, Averge Length: {}, Epoch Trajectory: {}".format(acc_reward, numpy.mean(epoch_steps), epoch_trajectory[:100]))
 
     # Test AnyMDPSolverQ
     solver = AnyMDPSolverQ(env)

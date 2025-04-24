@@ -30,27 +30,34 @@ def sample_mdp(state_number, na,
                  "s_0_prob": numpy.copy(s_0_prob)})
     
     # sample S_E
-    p_s_e_base = numpy.random.uniform(0, 0.5) # 50% pitfalls at maximum
-    s_e = numpy.random.choice([0, 1], size=state_number, p=[1 - p_s_e_base, p_s_e_base])
+    p_s_e_base = numpy.clip(numpy.random.uniform(-0.20, 0.40), 0.0, None) # 40% pitfalls at maximum
+    while True:
+        s_e = numpy.random.choice([0, 1], size=state_number, p=[1 - p_s_e_base, p_s_e_base])
+        if(numpy.sum(s_e) < state_number * p_s_e_base + 1):
+            break
     s_e[s_0] = 0 # make sure S_0 do not reset
-    if(random.random() < 0.5): # with 50% probability the last state is goal
+    if(random.random() < 0.4): # with 40% probability the last state is goal
         s_e[-1] = 1
         final_goal = True
     else:
         s_e[-1] = 0
         final_goal = False
-    task.update({"s_e": numpy.where(s_e == 1)[0]})
+    s_e = numpy.where(s_e == 1)[0]
+    task.update({"s_e": s_e})
 
     # sample transition s-s'
     trans_ss = numpy.zeros((state_number, state_number), dtype=float)
-    max_leap = random.randint(2, min(state_number // 4, 6)) # from 2 to 6
+    max_leap = random.randint(2, min(state_number // 4, 6) + 1) # from 2 to 6
+    max_retreat = random.randint(2, min(state_number // 2, 8) + 1) # from 2 to 8
+
     ss_from = numpy.zeros(state_number, dtype=int)
     ss_to = numpy.zeros(state_number, dtype=int)
     for s in range(state_number):
         if(s in s_e): continue
 
+        s_from_min = max(0, s - max_retreat)
         if(s > 2):
-            s_from = random.randint(0, s-1)  # start of the transition
+            s_from = random.randint(s_from_min, s-1)  # start of the transition
         else:
             s_from = 0
         s_to = random.randint(s + 1, s + max_leap) + 1 # end of the transition (exclusive)
@@ -70,17 +77,21 @@ def sample_mdp(state_number, na,
         ss_from[s] = s_from
         ss_to[s] = s_to
 
-        trans_ss[s, s_from:s_to] = random.uniform(0, 1, size=(s_to - s_from))
+        trans_ss[s, s_from:s_to] = random.uniform(0.20, 1, size=(s_to - s_from))
         trans_ss[s] = trans_ss[s] / numpy.sum(trans_ss[s])
 
     # sample average rewards s-s'
 
     # sample potential reward
+    if(random.random() < 0.5):
+        potential_reward_base = 0
+    else:
+        potential_reward_base = random.exponential(1.0)
     potential_reward_generator = RandomFourier(ndim=1, 
                                         max_order=5, 
                                         max_item=3, 
                                         max_steps=state_number * 2,
-                                        box_size=max(random.uniform(-5.0, 5.0), 0.0))
+                                        box_size=max(random.uniform(-potential_reward_base, potential_reward_base), 0.0))
     potential_reward = []
     for s in range(state_number):
         potential_reward.append(potential_reward_generator(s)[0])
@@ -89,68 +100,60 @@ def sample_mdp(state_number, na,
     # calculate potential cost
     potential_cost = numpy.max(potential_reward[-1] - potential_reward[s_0])
 
-    # calculate point cost
-    # probability to achieve the states
-    achieve_probability = numpy.sum(trans_ss, axis=0)
-
-    # award those hard to achieve
+    # add state-dependent reward
     position_reward = numpy.zeros(state_number)
     position_reward_noise = numpy.zeros(state_number)
-    base = random.exponential(1.0)
-    noise_base = numpy.clip(random.uniform(-0.30, 0.30), 0.0, None)
+    position_reward_base = random.exponential(5.0)
+    position_reward_noise_base  = numpy.clip(random.uniform(-0.30, 0.30), 0.0, None)
 
-    # award those hard to achieve
-    if(random.random() < 0.67):
-        for s in range(state_number):
-            if(s in s_e or s in s_0): continue
-            award_bar = random.uniform(0.05, 0.40)
-            punish_bar = random.uniform(0.80, 1.20)
-            if(achieve_probability[s] < award_bar):
-                position_reward[s] = random.uniform(0.5, 1.0) * base
-                position_reward_noise[s] = noise_base * position_reward[s]
-            elif(achieve_probability[s] > punish_bar): # those easy to achieve
-                position_reward[s] = - random.uniform(0.5, 1.0) * base
-                position_reward_noise[s] = - noise_base * position_reward[s]
+    # award those at the last part
+    for s in range(state_number):
+        if(s in s_e or s in s_0): continue
+        offset = (s + 1) / state_number
+        # Add position reward at the final half of the states
+        if(s > state_number // 2 and random.random() < offset - 0.5 and not final_goal):
+            position_reward[s] = random.uniform(0.4, offset) * position_reward_base
+            position_reward_noise[s] = position_reward_noise_base * position_reward[s]
+            # avoid easy-to-get rewards at the same state
+            trans_ss[s, s] /= 10.0 # at least reduce it to < 0.1
+            trans_ss[s] = trans_ss[s] / numpy.sum(trans_ss[s])
+        elif(random.random() < 0.15): # set random cost
+            position_reward[s] = - random.uniform(0.2, 0.50) * position_reward_base
+            position_reward_noise[s] = - position_reward_noise_base * position_reward[s]
 
-    # award the pitfalls
-    pitfalls_base = numpy.clip(random.uniform(-100.0, 10.0), None, 0.0)
+    # punish the pitfalls
+    if(random.random() < 0.2):
+        pitfalls_reward_base = 0
+    elif(random.random() < 0.60):
+        pitfalls_reward_base = - random.exponential(1.0)
+    else:
+        pitfalls_reward_base = - random.exponential(10.0)
+
     for s in s_e:
         if(s < state_number - 1): # not the final goal
-            position_reward[s] = pitfalls_base
+            position_reward[s] = pitfalls_reward_base
     
     # sample step cost / survive award
-    if(random.random() < 0.33):
+    if(random.random() < 0.50):
         step_reward = 0.0
     else:
         if(final_goal):
             step_reward = - random.exponential(0.10)
         else:
             step_reward = random.exponential(0.10)
-
-    # dynamic programming to find the cost
-    cur_cost = numpy.ones(state_number) * 1e10
-    cur_cost[s_0] = 0
-    active_queue = [s for s in s_0]
-    while(len(active_queue) > 0):
-        s = active_queue.pop(0)
-        for s_next in numpy.where(trans_ss[s] != 0)[0]:
-            new_cost = cur_cost[s] - min(position_reward[s_next], 0) - min(step_reward) # add the cost
-            if(new_cost < cur_cost[s_next]):
-                cur_cost[s_next] = new_cost
-                active_queue.append(s_next)
     
-    final_cost = cur_cost[-1]
-    goal_cost = final_cost + potential_cost
-
+    goal_cost = max(potential_cost, 0) + max(random.exponential(1.0), 0.25)
+    
     if(final_goal):
-        position_reward[-1] = random.uniform(1.5 * goal_cost, 4.0 * goal_cost)
+        position_reward[-1] = random.uniform(4.0 * goal_cost, 10.0 * goal_cost)
     else:
-        position_reward[-1] = max(random.uniform(2.0 * base, 10.0 * base),
-                                  2.0 * state_number * numpy.abs(step_reward))
-        
+        position_reward[-1] = random.uniform(4.0 * position_reward_base, 10.0 * position_reward_base)
+        trans_ss[-1, -1] /= 10.0 # at least reduce it to < 0.1
+
     # now further decompose the transition
 
     transition = numpy.zeros((state_number, na, state_number), dtype=float)
+    trans_ss[s] = trans_ss[s] / numpy.sum(trans_ss[s])
 
     for s in range(state_number):
         if(s in s_e): continue
@@ -174,31 +177,42 @@ def sample_mdp(state_number, na,
 
         transition[s, :, ss_from[s]:ss_to[s]] = a_prob * trans_ss[s:s+1, ss_from[s]:ss_to[s]]
 
+        transition[s] = transition[s] / numpy.sum(transition[s], axis=-1, keepdims=True)
+
+    # normalize the transition
+
     # prepare the reward matrix
     reward = numpy.zeros((state_number, na, state_number), dtype=float)
     reward_noise = numpy.zeros((state_number, na, state_number), dtype=float)
+    rnd_reward_base = numpy.clip(random.exponential(0.25), 0.0, 0.50)
 
     reward += potential_reward[:, None, None] - potential_reward[None, None, :]
     reward += position_reward[None, None, :]
     reward += step_reward
 
     sparsity = numpy.clip(numpy.random.uniform(-0.7, 0.3), 0, None)
+
     if(sparsity > eps):
-        reward += (random.normal(size=(state_number, na)) * base * (numpy.random.rand(state_number, na) < sparsity).astype(float))[:, :, None]
+        reward += (random.normal(size=(state_number, na)) * rnd_reward_base * (numpy.random.rand(state_number, na) < sparsity).astype(float))[:, :, None]
+        reward_noise += random.uniform(0.0, 0.30, size=reward.shape) * rnd_reward_base
 
     reward_noise += position_reward_noise[None, None, :]
 
     task.update({"transition": numpy.copy(transition),
                  "reward": numpy.copy(reward),
-                 "reward_noise": numpy.copy(reward_noise)})
+                 "reward_noise": numpy.copy(reward_noise),
+                 "final_goal_terminate": final_goal})
 
     return task
 
 def sample_bandit(na):
     base = random.exponential(1.0)
-    noise_base = numpy.clip(random.uniform(-0.30, 0.30), 0.0)
-    transition = numpy.zeros((1, na, 1), dtype=float)
-    reward = random.uniform(0.5 * base, base, size=(1, na, 1))
+    noise_base = numpy.clip(random.uniform(-0.30, 0.30), 0.0, None)
+    transition = numpy.ones((1, na, 1), dtype=float)
+    while True:
+        reward = random.uniform(0.5 * base, base, size=(1, na, 1))
+        if(numpy.std(reward) > 0.01):
+            break
     reward_noise = noise_base * reward
     return {"transition": numpy.copy(transition),
            "reward": numpy.copy(reward),
@@ -206,7 +220,6 @@ def sample_bandit(na):
            "s_0": numpy.array([0]),
            "s_e": numpy.array([]),
            "s_0_prob": numpy.array([1.0])}
-
 
 def AnyMDPTaskSampler(state_space:int=128,
                  action_space:int=5,
@@ -247,9 +260,10 @@ def AnyMDPTaskSampler(state_space:int=128,
     while(True):
         if(real_state_space == 1):
             task.update(sample_bandit(action_space))
+            break
         else:
             task.update(sample_mdp(real_state_space, action_space, verbose))
-        if(check_valuefunction(task)):
-            break
+            if(check_valuefunction(task, verbose=verbose)):
+                break
 
     return task
