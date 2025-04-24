@@ -36,7 +36,7 @@ def sample_mdp(state_number, na,
         if(numpy.sum(s_e) < state_number * p_s_e_base + 1):
             break
     s_e[s_0] = 0 # make sure S_0 do not reset
-    if(random.random() < 0.4): # with 40% probability the last state is goal
+    if(random.random() < 0.3): # with 30% probability the last state is goal. Sampling is balanced by value function filtering.
         s_e[-1] = 1
         final_goal = True
     else:
@@ -149,11 +149,10 @@ def sample_mdp(state_number, na,
     else:
         position_reward[-1] = random.uniform(4.0 * position_reward_base, 10.0 * position_reward_base)
         trans_ss[-1, -1] /= 10.0 # at least reduce it to < 0.1
+        trans_ss[-1] = trans_ss[-1] / numpy.sum(trans_ss[-1])
 
     # now further decompose the transition
-
     transition = numpy.zeros((state_number, na, state_number), dtype=float)
-    trans_ss[s] = trans_ss[s] / numpy.sum(trans_ss[s])
 
     for s in range(state_number):
         if(s in s_e): continue
