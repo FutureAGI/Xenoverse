@@ -14,7 +14,7 @@ class AnyMDPSolverQ(object):
         self.env = env
         self.na = env.action_space.n
         self.ns = env.observation_space.n
-        self.value_matrix = numpy.zeros((self.ns, self.na))
+        self.value_matrix = numpy.zeros((self.ns, self.na)) + 0.1/(1.0 - gamma)
         self.sa_visitied = numpy.ones((self.ns, self.na))
         self.gamma = gamma
         self.alpha = alpha
@@ -23,30 +23,30 @@ class AnyMDPSolverQ(object):
         self.value_std = numpy.zeros((self.ns,))
         self.avg_r = 0.0
         self.avg_r2 = 0.0
-        self.r_std = 0.10
+        self.r_std = 0.01
         self.r_cnt = 0
 
     def learner(self, s, a, ns, r, terminated, truncated):
-        if(terminated):
-            target = r
-        else:
-            target = r + self.gamma * max(self.value_matrix[ns])
         
         self.avg_r = (self.avg_r * self.r_cnt + r) / (self.r_cnt + 1)
         self.avg_r2 = (self.avg_r2 * self.r_cnt + r**2) / (self.r_cnt + 1)
         self.r_cnt = min(self.r_cnt + 1, 10000)
         self.r_std = numpy.sqrt(self.avg_r2 - self.avg_r**2)
-        error = target - self.value_matrix[s][a]
 
-        self.value_matrix[s][a] += self.alpha * error
+        b_t = self._c * self.r_std * numpy.sqrt(numpy.log(self.max_steps + 1) / self.sa_visitied[s,a])
+        lr = (self.max_steps + 1) / (self.max_steps + self.sa_visitied[s,a])
+
+        if(terminated):
+            target = r + 1.0 / (1.0 - self.gamma) * b_t
+        else:
+            target = r + b_t + self.gamma * max(self.value_matrix[ns])
+
+        error = target - self.value_matrix[s][a]
+        self.value_matrix[s][a] += self.alpha * lr * error
         self.sa_visitied[s][a] += 1
 
         self.value_std = numpy.clip(numpy.std(self.value_matrix, axis=-1), 0.10, None)
 
     def policy(self, state):
-        # Apply UCB with dynamic noise (Thompson Sampling)
-        values = self._c * self.value_std[state] * numpy.sqrt(numpy.log(self.max_steps + 1) / self.sa_visitied[state]) * \
-                numpy.maximum(numpy.random.randn(self.na), 0) + \
-                self.value_matrix[state]
         #print(self.value_matrix[state], self.env.reward)
-        return numpy.argmax(values)
+        return numpy.argmax(self.value_matrix[state])

@@ -4,16 +4,16 @@ if __name__=="__main__":
     import xenoverse.anymdp
     from xenoverse.anymdp import  AnyMDPSolverOpt, AnyMDPSolverOTS, AnyMDPSolverQ, AnyMDPTaskSampler
 
-    task = AnyMDPTaskSampler(state_space=1, 
+    task = AnyMDPTaskSampler(state_space=32, 
                              action_space=5,
                              min_state_space=None,
                              verbose=True)
-    max_steps = 100000
+    max_steps = 200000
     max_steps_rnd = 10000
     prt_freq = 1000
-    gamma = 0.99
-    c = 0.05
-    lr = 0.01
+    gamma = 0.98
+    c = 0.01
+    lr = 0.10
 
     # Test Random Policy
     env = gym.make("anymdp-v0")

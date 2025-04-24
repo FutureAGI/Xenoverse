@@ -10,67 +10,45 @@ import matplotlib.cm as cm
  
 
 def task_visualizer(task, show_gui=True, file_path=None):
-    if("state_embedding" not in task):
-        raise Exception("No state embedding found in task")
-    
-    ns, sv = task["state_embedding"].shape
-    ns1, na, ns2 = task["reward"].shape
-    ns3, na1, ns4 = task["transition"].shape
+    """
+    绘制一个 N x N 的网格图，格子之间用横线和纵线填充，格子内着色，带透明度，
+    并在最下方和最左方分别标记给定的标签列表。
 
-    assert ns == ns1 == ns2 == ns3 == ns4
-    assert na == na1
+    参数：
+    N : 网格的大小（N x N）
+    x_labels : x 轴的标签列表（长度为 N）
+    y_labels : y 轴的标签列表（长度为 N）
+    """
+    # 创建一个图形和坐标轴
+    fig, ax = plt.subplots(figsize=(8, 8))
 
-    projection_matrix = np.random.rand(sv, 3)
+    # 设置坐标轴范围
+    ax.set_xlim(0, N)
+    ax.set_ylim(0, N)
 
-    s= task["state_embedding"]
-    s_min = s.min(axis=0)
-    s_max = s.max(axis=0)
-    coordinates = np.matmul((s - s_min) / (s_max - s_min), projection_matrix)
-    link_strength_normalized = np.mean(task["transition"], axis=1)
-    rewards = np.mean(task["reward"], axis=(0, 1))
+    # 设置坐标轴刻度
+    ax.set_xticks(np.arange(0, N+1))
+    ax.set_yticks(np.arange(0, N+1))
 
-    fig = plt.figure()
-    ax = fig.add_subplot(111, projection='3d')
-    norm = mcolors.Normalize(vmin=np.min(rewards), vmax=np.max(rewards))
-    cmap = cm.viridis
+    # 设置坐标轴标签
+    ax.set_xticklabels([''] + x_labels)  # 在开头添加一个空字符串，以匹配刻度位置
+    ax.set_yticklabels([''] + y_labels)  # 在开头添加一个空字符串，以匹配刻度位置
 
-    ax.scatter(coordinates[:, 0], coordinates[:, 1], coordinates[:, 2], 
-                         c=cmap(norm(rewards)), marker='o')
+    # 绘制网格线
+    for i in range(N+1):
+        ax.axhline(y=i, color='black', linewidth=0.8)
+        ax.axvline(x=i, color='black', linewidth=0.8)
 
-    sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
-    sm.set_array([])
-    cbar = fig.colorbar(sm, ax=ax, shrink=0.2, aspect=5)
-    cbar.set_label('Rewards')
+    # 填充格子颜色，带透明度
+    for i in range(N):
+        for j in range(N):
+            rect = plt.Rectangle((i, j), 1, 1, facecolor='blue', alpha=0.3, edgecolor='none')
+            ax.add_patch(rect)
 
-    for i in range(ns):
-        for j in range(ns):
-            if i != j and link_strength_normalized[i,j] > 0.1:  
-                x_values = [coordinates[i, 0], coordinates[j, 0]]
-                y_values = [coordinates[i, 1], coordinates[j, 1]]
-                z_values = [coordinates[i, 2], coordinates[j, 2]]
-                c = max(0, float(1 - 2 * link_strength_normalized[i, j]))
-                ax.plot(x_values, y_values, z_values, color=(c,c,c), linewidth=2)
-       
-    ax.set_title('AnyMDP Task Visualization')
-
-    ax.set_xticklabels([])
-    ax.set_yticklabels([])
-    ax.set_zticklabels([])
-    
-    ax.xaxis.set_ticks_position('none')
-    ax.yaxis.set_ticks_position('none')
-    ax.zaxis.set_ticks_position('none')
-
-    ax.xaxis.set_pane_color((1.0, 1.0, 1.0, 0.0))
-    ax.yaxis.set_pane_color((1.0, 1.0, 1.0, 0.0))
-    ax.zaxis.set_pane_color((1.0, 1.0, 1.0, 0.0))
-    
-    ax.grid(False)
-    if show_gui:
-        plt.show()
-    if file_path is not None:
-        plt.savefig(file_path)
-
+    # 设置坐标轴
+    plt.gca().invert_yaxis()  # 反转 y 轴，使 (0, 0) 在左上角
+    plt.grid(True)
+    plt.show()
 
 if __name__ == '__main__':
     from xenoverse.anymdp import AnyMDPTaskSampler

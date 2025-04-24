@@ -161,7 +161,7 @@ def sample_mdp(state_number, na,
 
         # na x ns dimension, representing the distance of the action to the corresponding state
         a_dist = (a_center[:, None] - numpy.arange(ss_from[s], ss_to[s])[None, :]) ** 2
-        sigma = numpy.clip(random.exponential(1.0), 0.20, 2.0)
+        sigma = numpy.clip(random.exponential(1.0), 0.20, 1.6)
         
         a_prob = numpy.exp(-a_dist / sigma**2)
 
