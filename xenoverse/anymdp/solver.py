@@ -117,13 +117,14 @@ def check_valuefunction(task, verbose=False):
         vm_diffs.append(vm_diff)
         
     # check the stationary distribution of the optimal value function
+    K = int(numpy.log2(task["max_steps"]))
     gini, ent = get_opt_trajectory_dist(task["s_0"], 
                             task["s_0_prob"],
                             task["s_e"], 
                             ns, na, 
                             t_mat, 
                             vm_opt, 
-                            K=10)
+                            K=K)
     
     vm_diffs = numpy.mean(vm_diffs)
     if(verbose):
