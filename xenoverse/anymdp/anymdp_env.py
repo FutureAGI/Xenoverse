@@ -24,7 +24,7 @@ class AnyMDPEnv(gym.Env):
             setattr(self, k, v)
 
         assert self.transition.shape == self.reward.shape
-        assert self.transition.shape[0] == self.ns and self.transition.shape[1] == self.na
+        assert self.transition.shape[0] == len(self.state_mapping) and self.transition.shape[1] == self.na
 
         assert self.ns > 0, "State space must be at least 1"
         assert self.na > 1, "Action space must be at least 2"
@@ -56,18 +56,22 @@ class AnyMDPEnv(gym.Env):
         random.seed(pseudo_random_seed())
 
         self._state = numpy.random.choice(self.s_0, p=self.s_0_prob)
-        return self.state_mapping[self._state], {"steps": self.steps}
+        return int(self.state_mapping[self._state]), {"steps": self.steps}
 
     def step(self, action):
         if(self.need_reset or not self.task_set):
             raise Exception("Must \"set_task\" and \"reset\" before doing any actions")
+        if(self._state in self.s_e and self.ns > 1):
+            raise Exception(f"Unexpected Error: Given an ended state: {self.inner_state()}")
         assert action < self.na, "Action must be less than the number of actions"
         transition_gt = numpy.copy(self.transition[self._state, action])
         next_state = random.choice(len(self.state_mapping), p=transition_gt)
+
+        # sample the reward
         reward_gt = self.reward[self._state, action, next_state]
         reward_gt_noise = self.reward_noise[self._state, action, next_state]
-
         reward = random.normal(reward_gt, reward_gt_noise)
+        #print("reward_gt", reward_gt, "reward_gt_noise", reward_gt_noise, reward)
 
         info = {"steps": self.steps, "reward_gt": reward_gt}
 
@@ -83,12 +87,12 @@ class AnyMDPEnv(gym.Env):
 
         if(terminated or truncated):
             self.need_reset = True
-        return self.state_mapping[next_state], reward, terminated, truncated, info
+        return int(self.state_mapping[next_state]), reward, terminated, truncated, info
     
     @property
     def state(self):
-        return self.state_mapping[self._state]
+        return int(self.state_mapping[self._state])
     
     @property
     def inner_state(self):
-        return self._state
+        return int(self._state)

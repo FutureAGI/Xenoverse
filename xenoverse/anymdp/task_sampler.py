@@ -87,7 +87,7 @@ def sample_mdp(state_number, na,
     if(random.random() < 0.5):
         potential_reward_base = 0
     else:
-        potential_reward_base = random.exponential(1.0)
+        potential_reward_base = numpy.clip(random.exponential(1.0), 0.20, 5.0)
     potential_reward_generator = RandomFourier(ndim=1, 
                                         max_order=5, 
                                         max_item=3, 
@@ -104,7 +104,7 @@ def sample_mdp(state_number, na,
     # add state-dependent reward
     position_reward = numpy.zeros(state_number)
     position_reward_noise = numpy.zeros(state_number)
-    position_reward_base = random.exponential(1.0)
+    position_reward_base = random.exponential(0.2)
     position_reward_noise_base  = numpy.clip(random.uniform(-0.30, 0.30), 0.0, None)
 
     # award those at the last part
@@ -128,7 +128,7 @@ def sample_mdp(state_number, na,
     elif(random.random() < 0.60):
         pitfalls_reward_base = - random.exponential(0.20)
     else:
-        pitfalls_reward_base = - random.exponential(2.0)
+        pitfalls_reward_base = - random.exponential(1.0)
 
     for s in s_e:
         if(s < state_number - 1): # not the final goal
@@ -143,12 +143,12 @@ def sample_mdp(state_number, na,
         else:
             step_reward = random.exponential(0.02)
     
-    goal_cost = max(potential_cost, 0) + max(random.exponential(0.20), 0.05)
+    goal_cost = max(potential_cost, 0) + min(max(random.exponential(0.20), 0.05), 1.6)
     
     if(final_goal):
-        position_reward[-1] = random.uniform(4.0 * goal_cost, 10.0 * goal_cost)
+        position_reward[-1] = random.uniform(4.0 * goal_cost, 8.0 * goal_cost)
     else:
-        position_reward[-1] = random.uniform(4.0 * position_reward_base, 10.0 * position_reward_base)
+        position_reward[-1] = random.uniform(4.0 * position_reward_base, 8.0 * position_reward_base)
         trans_ss[-1, -1] /= 10.0 # at least reduce it to < 0.1
         trans_ss[-1] = trans_ss[-1] / numpy.sum(trans_ss[-1])
 

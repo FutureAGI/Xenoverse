@@ -20,7 +20,6 @@ class AnyMDPSolverQ(object):
         self.alpha = alpha
         self.max_steps = max_steps
         self._c = c / (1.0 - self.gamma)
-        self.value_std = numpy.zeros((self.ns,))
         self.avg_r = 0.0
         self.avg_r2 = 0.0
         self.r_std = 0.01
@@ -32,7 +31,6 @@ class AnyMDPSolverQ(object):
         self.avg_r2 = (self.avg_r2 * self.r_cnt + r**2) / (self.r_cnt + 1)
         self.r_cnt = min(self.r_cnt + 1, 10000)
         self.r_std = numpy.sqrt(max(self.avg_r2 - self.avg_r**2, 1.0e-4))
-
         b_t = self._c * self.r_std * numpy.sqrt(numpy.log(self.max_steps + 1) / self.sa_visitied[s,a])
         lr = (self.max_steps + 1) / (self.max_steps + self.sa_visitied[s,a])
 
@@ -45,8 +43,5 @@ class AnyMDPSolverQ(object):
         self.value_matrix[s][a] += self.alpha * lr * error
         self.sa_visitied[s][a] += 1
 
-        self.value_std = numpy.clip(numpy.std(self.value_matrix, axis=-1), 0.10, None)
-
     def policy(self, state):
-        #print(self.value_matrix[state], self.env.reward)
         return numpy.argmax(self.value_matrix[state])

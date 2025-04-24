@@ -59,6 +59,7 @@ def update_value_matrix(t_mat, r_mat, gamma, vm, max_iteration=-1, is_greedy=Tru
     diff = 1.0
     cur_vm = numpy.copy(vm)
     ns, na, _ = r_mat.shape
+    alpha = 0.20
     iteration = 0
     while diff > 1.0e-4 and (
             (max_iteration < 0) or 
@@ -71,10 +72,11 @@ def update_value_matrix(t_mat, r_mat, gamma, vm, max_iteration=-1, is_greedy=Tru
                 exp_q = 0.0
                 for sn in range(ns):
                     if(is_greedy):
-                        exp_q += t_mat[s,a,sn] * numpy.max(cur_vm[sn])
+                        exp_q += t_mat[s,a,sn] * (gamma * numpy.max(cur_vm[sn]) + r_mat[s, a, sn])
                     else:
-                        exp_q += t_mat[s,a,sn] * numpy.mean(cur_vm[sn])
-                cur_vm[s,a] = numpy.dot(r_mat[s,a], t_mat[s,a]) + gamma * exp_q
+                        exp_q += t_mat[s,a,sn] * (gamma * numpy.mean(cur_vm[sn]) + r_mat[s, a, sn])
+                cur_vm[s,a] += alpha * (exp_q - cur_vm[s,a])
+
         diff = numpy.sqrt(numpy.mean((old_vm - cur_vm)**2))
     return cur_vm
 
@@ -82,13 +84,12 @@ def get_opt_trajectory_dist(s0, s0_prob, se, ns, na, transition, vm, K=8):
     a_max = numpy.argmax(vm, axis=1)
     i_indices = np.arange(ns)[:, None]
     j_indices = np.arange(ns)
-    max_trans = transition[i_indices, a_max[:, None], j_indices]
+    max_trans = numpy.copy(transition[i_indices, a_max[:, None], j_indices])
     for s in se:
         max_trans[s, s0] = s0_prob # s_e directly lead to s0
 
     for _ in range(K):
         max_trans = numpy.matmul(max_trans, max_trans)
-    
     gini_impurity = []
     normal_entropy = []
 
@@ -109,10 +110,6 @@ def check_valuefunction(task, verbose=False):
     vm_opt = update_value_matrix(t_mat, r_mat, gamma, numpy.zeros((ns, na), dtype=float), is_greedy=True)
     vm_rnd = update_value_matrix(t_mat, r_mat, gamma, numpy.zeros((ns, na), dtype=float), is_greedy=False)
 
-    vm_wht = numpy.ones((ns, ), dtype=int)
-    vm_wht[task["s_e"]] = 0
-    vm_rnd_std = numpy.std(vm_rnd[numpy.where(vm_wht>0)])
-
     # Get Average Reward
     avg_vm_opt = vm_opt * (1.0 - gamma) * task["max_steps"]
     avg_vm_rnd = vm_rnd * (1.0 - gamma) * task["max_steps"]
@@ -120,10 +117,10 @@ def check_valuefunction(task, verbose=False):
 
     for s in task["s_0"]:
         vm_diff = numpy.max(avg_vm_opt[s]) - numpy.max(avg_vm_rnd[s])
-        if(vm_diff < (0.10 * vm_rnd_std + 0.01)):
+        if(vm_diff < 2.0):
             return False
         vm_diffs.append(vm_diff)
-        
+    
     # check the stationary distribution of the optimal value function
     K = int(numpy.log2(task["max_steps"])) + 1
     gini, ent = get_opt_trajectory_dist(

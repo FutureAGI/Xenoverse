@@ -15,12 +15,12 @@ class AnyMDPSolverOpt(object):
         self.transition_matrix = env.transition
         self.reward_matrix = env.reward
         self.state_mapping = env.state_mapping
-        self.value_matrix = numpy.zeros((self.ns, self.na))
+        self.value_matrix = numpy.zeros((len(env.state_mapping), self.na))
         self.gamma = gamma
         self.inverse_state_mapping = dict()
         for i,state in enumerate(self.state_mapping):
             self.inverse_state_mapping[state] = i
-        self.q_solver()
+        self.q_solver(gamma=gamma)
 
     def q_solver(self, gamma=0.99):
         self.value_matrix = update_value_matrix(self.transition_matrix, self.reward_matrix, gamma, self.value_matrix)
