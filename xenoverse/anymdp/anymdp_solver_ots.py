@@ -32,7 +32,7 @@ class AnyMDPSolverOTS(object):
         self.est_r_global_cnt = 0
         self.alpha = alpha
 
-    def learner(self, s, a, ns, r, done):
+    def learner(self, s, a, ns, r, terminated, truncated):
         # Update the environment model estimation
         if(self.est_r_cnt[s,a] > 0):
             self.est_r[s,a] += (r - self.est_r[s,a])/self.est_r_cnt[s,a]
@@ -50,11 +50,12 @@ class AnyMDPSolverOTS(object):
 
         est_t = self.est_t / numpy.sum(self.est_t, axis=-1, keepdims=True)
 
-        if(not done):
+        if(terminated):
+            est_value = self.est_r[s,a]
+        else:
             est_target = numpy.sum(est_t[s, a] * numpy.max(self.value_matrix, axis=-1))
             est_value = self.est_r[s,a] + self.gamma * est_target
-        else:
-            est_value = self.est_r[s,a]
+        
         self.value_matrix[s,a] += self.alpha * (est_value - self.value_matrix[s,a])
         self.value_std = numpy.clip(numpy.std(self.value_matrix, axis=-1), 0.10, None)
 

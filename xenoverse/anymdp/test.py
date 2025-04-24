@@ -4,7 +4,7 @@ if __name__=="__main__":
     import xenoverse.anymdp
     from xenoverse.anymdp import  AnyMDPSolverOpt, AnyMDPSolverOTS, AnyMDPSolverQ, AnyMDPTaskSampler
 
-    task = AnyMDPTaskSampler(state_space=128, 
+    task = AnyMDPTaskSampler(state_space=1, 
                              action_space=5,
                              min_state_space=None,
                              verbose=True)
@@ -74,7 +74,7 @@ if __name__=="__main__":
     while steps < max_steps:
         action = solver.policy(state)
         next_state, reward, terminated, truncated, info = env.step(action)
-        solver.learner(state, action, next_state, reward, terminated)
+        solver.learner(state, action, next_state, reward, terminated, truncated)
         acc_reward += reward
         epoch_reward += reward
         state = next_state
@@ -96,7 +96,7 @@ if __name__=="__main__":
     while steps < max_steps:
         action = solver.policy(state)
         next_state, reward, terminated, truncated, info = env.step(action)
-        solver.learner(state, action, next_state, reward, terminated)
+        solver.learner(state, action, next_state, reward, terminated, truncated)
         acc_reward += reward
         epoch_reward += reward
         state = next_state

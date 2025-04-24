@@ -35,7 +35,8 @@ class AnyMDPEnv(gym.Env):
         # check transition matrix is valid
         t_mat_sum = numpy.sum(self.transition, axis=-1)
         error = (t_mat_sum - 1.0)**2
-        error[self.s_e] = 0.0
+        if(len(self.s_e) > 0):
+            error[self.s_e] = 0.0
         if((error >= 1.0e-6).any()):
             raise Exception(f'Transition Matrix Sum != 1 at {numpy.where(error>=1.0e-6)}')
         # check if there is any state that is both start and end
@@ -79,6 +80,8 @@ class AnyMDPEnv(gym.Env):
         self._state = next_state
         terminated = (self._state in self.s_e)
         truncated = self.steps >= self.max_steps
+        if(self.ns == 1): # bandit problem
+            terminated = True
         if(terminated or truncated):
             self.need_reset = True
         return self.state_mapping[next_state], reward, terminated, truncated, info

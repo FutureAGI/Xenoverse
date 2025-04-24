@@ -11,6 +11,7 @@ class AnyMDPSolverQ(object):
         The exploration strategy is controlled by UCB-H with c as its hyperparameter. Increasing c will encourage exploration
         Simulation of the ideal policy when the ground truth is not known
         """
+        self.env = env
         self.na = env.action_space.n
         self.ns = env.observation_space.n
         self.value_matrix = numpy.zeros((self.ns, self.na))
@@ -25,9 +26,8 @@ class AnyMDPSolverQ(object):
         self.r_std = 0.10
         self.r_cnt = 0
 
-
-    def learner(self, s, a, ns, r, done):
-        if(done):
+    def learner(self, s, a, ns, r, terminated, truncated):
+        if(terminated):
             target = r
         else:
             target = r + self.gamma * max(self.value_matrix[ns])
@@ -43,10 +43,10 @@ class AnyMDPSolverQ(object):
 
         self.value_std = numpy.clip(numpy.std(self.value_matrix, axis=-1), 0.10, None)
 
-
     def policy(self, state):
         # Apply UCB with dynamic noise (Thompson Sampling)
         values = self._c * self.value_std[state] * numpy.sqrt(numpy.log(self.max_steps + 1) / self.sa_visitied[state]) * \
                 numpy.maximum(numpy.random.randn(self.na), 0) + \
                 self.value_matrix[state]
+        #print(self.value_matrix[state], self.env.reward)
         return numpy.argmax(values)
