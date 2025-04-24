@@ -78,10 +78,9 @@ class AnyMDPEnv(gym.Env):
 
         self.steps += 1
         self._state = next_state
-        terminated = (self._state in self.s_e)
+        terminated = (self._state in self.s_e) or (self.ns < 2)
         truncated = self.steps >= self.max_steps
-        if(self.ns == 1): # bandit problem
-            terminated = True
+
         if(terminated or truncated):
             self.need_reset = True
         return self.state_mapping[next_state], reward, terminated, truncated, info
