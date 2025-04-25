@@ -18,7 +18,7 @@ from xenoverse.anymdp.anymdp_solver_opt import AnyMDPSolverOpt
 from xenoverse.anymdp.anymdp_solver_ots import AnyMDPSolverOTS
 from xenoverse.anymdp.anymdp_solver_q import AnyMDPSolverQ
 from xenoverse.anymdp.task_sampler import AnyMDPTaskSampler
-from xenoverse.anymdp.visualizer import task_visualizer
+from xenoverse.anymdp.visualizer import anymdp_task_visualizer
 
 register(
     id='anymdp-v0',

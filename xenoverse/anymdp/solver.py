@@ -59,7 +59,7 @@ def update_value_matrix(t_mat, r_mat, gamma, vm, max_iteration=-1, is_greedy=Tru
     diff = 1.0
     cur_vm = numpy.copy(vm)
     ns, na, _ = r_mat.shape
-    alpha = 0.20
+    alpha = 1.0
     iteration = 0
     while diff > 1.0e-4 and (
             (max_iteration < 0) or 
@@ -78,6 +78,7 @@ def update_value_matrix(t_mat, r_mat, gamma, vm, max_iteration=-1, is_greedy=Tru
                 cur_vm[s,a] += alpha * (exp_q - cur_vm[s,a])
 
         diff = numpy.sqrt(numpy.mean((old_vm - cur_vm)**2))
+        alpha = max(0.80 * alpha, 0.50)
     return cur_vm
 
 def get_opt_trajectory_dist(s0, s0_prob, se, ns, na, transition, vm, K=8):
@@ -134,7 +135,8 @@ def check_valuefunction(task, verbose=False):
     
     t_mat_sum = numpy.sum(t_mat, axis=-1)
     error = (t_mat_sum - 1.0)**2
-    error[task["s_e"]] = 0.0
+    if(len(task["s_e"]) > 0):
+        error[task["s_e"]] = 0.0
     if((error >= 1.0e-6).any()):
         if(verbose):
             print("Transition Matrix Error: ", numpy.where(error>=1.0e-6))
@@ -143,4 +145,4 @@ def check_valuefunction(task, verbose=False):
     vm_diffs = numpy.mean(vm_diffs)
     if(verbose):
         print("Value Diff: {:.4f}, Gini Impurity: {:.4f}, Normalized Entropy: {:.4f}, final_goal_terminate: {}".format(vm_diffs, gini,ent, task["final_goal_terminate"]))
-    return gini > 0.7 and ent > 0.5
+    return gini > 0.70 and ent > 0.35

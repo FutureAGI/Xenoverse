@@ -4,53 +4,116 @@ AnyMDP Task Visualization
 
 import numpy as np
 import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
-import matplotlib.colors as mcolors
-import matplotlib.cm as cm
- 
+import matplotlib.patches as mpatches
+from xenoverse.anymdp.solver import update_value_matrix
 
-def task_visualizer(task, show_gui=True, file_path=None):
-    """
-    绘制一个 N x N 的网格图，格子之间用横线和纵线填充，格子内着色，带透明度，
-    并在最下方和最左方分别标记给定的标签列表。
 
-    参数：
-    N : 网格的大小（N x N）
-    x_labels : x 轴的标签列表（长度为 N）
-    y_labels : y 轴的标签列表（长度为 N）
-    """
+def anymdp_task_visualizer(task, 
+                    need_lengends=True, 
+                    need_ticks=True,
+                    show_gui=True, 
+                    file_path=None):
     # 创建一个图形和坐标轴
     fig, ax = plt.subplots(figsize=(8, 8))
 
-    # 设置坐标轴范围
-    ax.set_xlim(0, N)
-    ax.set_ylim(0, N)
+    ns = task["ns"]
+    na = task["na"]
 
-    # 设置坐标轴刻度
-    ax.set_xticks(np.arange(0, N+1))
-    ax.set_yticks(np.arange(0, N+1))
+    transition = task["transition"]
+    reward = task["reward"]
 
-    # 设置坐标轴标签
-    ax.set_xticklabels([''] + x_labels)  # 在开头添加一个空字符串，以匹配刻度位置
-    ax.set_yticklabels([''] + y_labels)  # 在开头添加一个空字符串，以匹配刻度位置
+    s_0 = task["s_0"]
+    s_e = task["s_e"]
 
-    # 绘制网格线
-    for i in range(N+1):
-        ax.axhline(y=i, color='black', linewidth=0.8)
-        ax.axvline(x=i, color='black', linewidth=0.8)
+    state_mapping = task["state_mapping"]
+    state_mapping = [str(state_mapping[i]) for i in range(ns)]
 
-    # 填充格子颜色，带透明度
-    for i in range(N):
-        for j in range(N):
-            rect = plt.Rectangle((i, j), 1, 1, facecolor='blue', alpha=0.3, edgecolor='none')
+    vm = np.zeros((ns, na))
+    vm = update_value_matrix(task["transition"], task["reward"], 0.99, vm)
+    vsm = np.max(vm, axis=-1)
+
+    if(need_ticks):
+        ax.set_xticks(np.arange(- 0.5, ns + 0.5))
+        ax.set_yticks(np.arange(- 0.5, ns + 0.5))
+        ax.set_xticklabels([''] + state_mapping)
+        ax.set_yticklabels([''] + state_mapping)
+    else:
+        ax.set_xticks([])
+        ax.set_yticks([])
+
+    ax.set_xlim(0, ns)
+    ax.set_ylim(0, ns)
+
+    ax.tick_params(axis='both', which='both', length=0)
+
+    trans_ss = np.mean(transition, axis=1)
+    r_position = np.mean(reward, axis=(0, 1))
+
+    for i in range(ns): # State From
+        for j in range(ns): # State To
+            alpha = min(trans_ss[i, j] * 5.0, 1.0)
+            rect = plt.Rectangle((j, i), 1, 1, facecolor='grey', alpha=alpha, edgecolor='none')
             ax.add_patch(rect)
 
-    # 设置坐标轴
-    plt.gca().invert_yaxis()  # 反转 y 轴，使 (0, 0) 在左上角
-    plt.grid(True)
-    plt.show()
+    # Start states
+    for s in s_0:
+        rect = plt.Rectangle((0, s), ns, 1, facecolor='green', alpha=0.25, edgecolor='none')
+        ax.add_patch(rect)
+
+    # End states
+    for s in s_e:
+        if(s >= ns-1):
+            color = 'blue'
+            alpha = 0.40
+        else:
+            color = 'red'
+            alpha = 0.20
+
+        rect = plt.Rectangle((0, s), ns, 1, facecolor=color, alpha=alpha, edgecolor='none')
+        ax.add_patch(rect)
+        rect = plt.Rectangle((s, 0), 1, ns, facecolor=color, alpha=alpha, edgecolor='none')
+        ax.add_patch(rect)
+
+    ax.set_xlabel('State ($t+1$)', fontsize=12, fontweight='bold')
+    ax.set_ylabel('State ($t$)', fontsize=12, fontweight='bold')
+
+    lw = 24 / (ns + 16)
+    for i in range(ns + 1):
+        ax.axhline(y=i, color='black', linewidth=lw)
+        ax.axvline(x=i, color='black', linewidth=lw)
+
+    # Plot the value function
+    nonpitfalls = np.array([i for i in range(ns) if i not in s_e])
+
+    v_max = np.max(vsm[nonpitfalls])
+    v_min = np.min(vsm[nonpitfalls])
+
+    scale = (v_max - v_min) * 0.05
+    ax_v = ax.twinx()
+    ax_v.set_ylim(v_min - scale, v_max + scale)
+    ax_v.plot(nonpitfalls + 0.5, vsm[nonpitfalls], color='black', marker='o', linestyle='-', linewidth=2.5)
+
+    ax_v.set_ylabel('State Value Function', fontsize=12, fontweight='bold', color='black')
+    ax_v.tick_params(axis='y', labelcolor='black')
+
+    if(need_lengends):
+        transition_patch = mpatches.Patch(color='grey', alpha=0.5, label='$\mathbb{E}_{a}[P(s_t,a,s_{t+1})]$')
+        born_patch = mpatches.Patch(color='green', alpha=0.2, label='$\mathcal{S}_0$')
+        pitfall_patch = mpatches.Patch(color='red', alpha=0.2, label='$\mathcal{S}_E$ (pitfalls)')
+        goal_patch = mpatches.Patch(color='blue', alpha=0.4, label='$\mathcal{S}_E$ (goals)')
+
+        ax.legend(handles=[transition_patch, born_patch, pitfall_patch, goal_patch], loc='center left', fontsize=10)
+
+    # Show and save
+    if(show_gui):
+        plt.show()
+
+    if(file_path is not None):
+        plt.savefig(file_path)
 
 if __name__ == '__main__':
     from xenoverse.anymdp import AnyMDPTaskSampler
-    task = AnyMDPTaskSampler(128, 5, keep_metainfo=True)
-    task_visualizer(task)
+    ns = 128
+    na = 5
+    task = AnyMDPTaskSampler(ns, na, verbose=True)
+    anymdp_task_visualizer(task, need_ticks=False, file_path='./vis_anymdp_ns{ns}na{na}.pdf')

@@ -32,7 +32,7 @@ class AnyMDPSolverQ(object):
         self.r_cnt = min(self.r_cnt + 1, 10000)
         self.r_std = numpy.sqrt(max(self.avg_r2 - self.avg_r**2, 1.0e-4))
         b_t = self._c * self.r_std * numpy.sqrt(numpy.log(self.max_steps + 1) / self.sa_visitied[s,a])
-        lr = (self.max_steps + 1) / (self.max_steps + self.sa_visitied[s,a])
+        lr = max((self.max_steps + 1) / (self.max_steps + self.sa_visitied[s,a]), 2.0e-3)
 
         if(terminated):
             target = r + 1.0 / (1.0 - self.gamma) * b_t
