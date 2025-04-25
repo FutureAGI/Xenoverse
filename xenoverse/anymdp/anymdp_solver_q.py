@@ -5,7 +5,7 @@ class AnyMDPSolverQ(object):
     """
     Solver for AnyMDPEnv with Q-Learning
     """
-    def __init__(self, env, gamma=0.99, c=0.05, alpha=0.01, max_steps=4000):
+    def __init__(self, env, gamma=0.99, c=1.0, alpha=0.01, max_steps=4000):
         """
         The constructor for the class AnyMDPSolverQ
         The exploration strategy is controlled by UCB-H with c as its hyperparameter. Increasing c will encourage exploration
@@ -19,7 +19,7 @@ class AnyMDPSolverQ(object):
         self.gamma = gamma
         self.alpha = alpha
         self.max_steps = max_steps
-        self._c = c / (1.0 - self.gamma)
+        self._c = c
         self.avg_r = 0.0
         self.avg_r2 = 0.0
         self.r_std = 0.01
@@ -34,10 +34,11 @@ class AnyMDPSolverQ(object):
         b_t = self._c * self.r_std * numpy.sqrt(numpy.log(self.max_steps + 1) / self.sa_visitied[s,a])
         lr = max((self.max_steps + 1) / (self.max_steps + self.sa_visitied[s,a]), 2.0e-3)
 
+        rnd_vec = random.uniform(0.0, 1.0, size=b_t.shape)
         if(terminated):
-            target = r + 1.0 / (1.0 - self.gamma) * b_t
+            target = r + 1.0 / (1.0 - self.gamma) * b_t * rnd_vec
         else:
-            target = r + b_t + self.gamma * max(self.value_matrix[ns])
+            target = r + b_t * rnd_vec + self.gamma * max(self.value_matrix[ns])
 
         error = target - self.value_matrix[s][a]
         self.value_matrix[s][a] += self.alpha * lr * error

@@ -5,9 +5,19 @@ import numpy
 import gymnasium as gym
 import pygame
 from numpy import random
-
+from numba import njit
 from gymnasium import spaces
 from xenoverse.utils import pseudo_random_seed
+
+@njit(cache=True)
+def map_transition_reward(t, r, t_obs, r_obs, s_mapping):
+    ns, na, _ = t.shape
+    for i,si in enumerate(s_mapping):
+        for a in range(na):
+            for j,sj in enumerate(s_mapping):
+                t_obs[si][a][sj] = t[i][a][j]
+                r_obs[si][a][sj] = r[i][a][j]
+    return t_obs, r_obs
 
 class AnyMDPEnv(gym.Env):
     def __init__(self, max_steps):
@@ -32,6 +42,16 @@ class AnyMDPEnv(gym.Env):
         self.observation_space = spaces.Discrete(self.ns)
         self.action_space = spaces.Discrete(self.na)
 
+        # inverse mapping from observation to inner state
+        self.obs2inner = list(range(self.ns))
+        for i,s in enumerate(self.state_mapping):
+            self.obs2inner[s] = i # do permutation to avoid empty mapping
+            self.obs2inner[i] = s
+        # Get observation transition and reward
+        self.transition_obs = numpy.zeros((self.ns, self.na, self.ns))
+        self.reward_obs = numpy.zeros((self.ns, self.na, self.ns))
+        self.transition_obs, self.reward_obs = map_transition_reward(self.transition, self.reward, self.transition_obs, self.reward_obs, self.state_mapping)
+
         # check transition matrix is valid
         t_mat_sum = numpy.sum(self.transition, axis=-1)
         error = (t_mat_sum - 1.0)**2
@@ -39,6 +59,7 @@ class AnyMDPEnv(gym.Env):
             error[self.s_e] = 0.0
         if((error >= 1.0e-6).any()):
             raise Exception(f'Transition Matrix Sum != 1 at {numpy.where(error>=1.0e-6)}')
+        
         # check if there is any state that is both start and end
         intersection = numpy.intersect1d(self.s_0, self.s_e)
         if(len(intersection) > 0):
@@ -71,14 +92,9 @@ class AnyMDPEnv(gym.Env):
         reward_gt = self.reward[self._state, action, next_state]
         reward_gt_noise = self.reward_noise[self._state, action, next_state]
         reward = random.normal(reward_gt, reward_gt_noise)
-        #print("reward_gt", reward_gt, "reward_gt_noise", reward_gt_noise, reward)
 
         info = {"steps": self.steps, "reward_gt": reward_gt}
-
-        transition_observed_gt = numpy.zeros((self.ns,))
-        for i,s in enumerate(self.state_mapping):
-            transition_observed_gt[s] = transition_gt[i]
-        info["transition_gt"] = transition_observed_gt
+        info["transition_gt"] = self.transition_obs[self.state, action]
 
         self.steps += 1
         self._state = next_state
@@ -94,5 +110,14 @@ class AnyMDPEnv(gym.Env):
         return int(self.state_mapping[self._state])
     
     @property
-    def inner_state(self):
-        return int(self._state)
+    def inner_state(self, query_state=None):
+        if(query_state is None):
+            return int(self._state)
+        else:
+            return int(self.obs2inner[query_state])
+    
+    def get_gt_transition(self):
+        return self.transition_obs
+    
+    def get_gt_reward(self):
+        return self.reward_obs

@@ -69,7 +69,7 @@ def run_rnd_opt(task, max_steps=10000, prt_freq=1000):
         return True
 
 if __name__=="__main__":
-    ns = 64
+    ns = 8
     na = 5
     while True:
         task = AnyMDPTaskSampler(state_space=ns, 
