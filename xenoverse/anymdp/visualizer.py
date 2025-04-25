@@ -105,15 +105,15 @@ def anymdp_task_visualizer(task,
         ax.legend(handles=[transition_patch, born_patch, pitfall_patch, goal_patch], loc='center left', fontsize=10)
 
     # Show and save
+    if(file_path is not None):
+        plt.savefig(file_path + '.pdf', format='pdf')
+
     if(show_gui):
         plt.show()
 
-    if(file_path is not None):
-        plt.savefig(file_path)
-
 if __name__ == '__main__':
     from xenoverse.anymdp import AnyMDPTaskSampler
-    ns = 128
+    ns = 16
     na = 5
     task = AnyMDPTaskSampler(ns, na, verbose=True)
-    anymdp_task_visualizer(task, need_ticks=False, file_path='./vis_anymdp_ns{ns}na{na}.pdf')
+    anymdp_task_visualizer(task, need_ticks=False, file_path=f'./vis_anymdp_ns{ns}na{na}')
