@@ -7,7 +7,7 @@ from copy import deepcopy
 from xenoverse.utils import pseudo_random_seed
 from xenoverse.anymdp.solver import check_valuefunction
 from xenoverse.utils import RandomFourier
-from task_sampler_utils import sample_bandit, sample_mdp
+from xenoverse.anymdp.task_sampler_utils import sample_bandit, sample_mdp
 
 eps = 1e-10
 
