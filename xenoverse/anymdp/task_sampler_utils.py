@@ -93,37 +93,44 @@ def sample_transition(ns, na, s0_range=3):
 
     # sample transition s-s'
     trans_ss = numpy.zeros((ns, ns), dtype=float)
-    max_leap = min(ns // 4, 6) + 1 # from 2 to 6
-    max_retreat = min(ns // 2, 18) + 1 # from 2 to ns // 2
+    min_leap = 2
+    max_leap = max(min_leap + 1, ns // 4 + 1) # max forward leap
+    min_back = 4
+    max_back = max(min_back + 1, ns // 2 + 1) # max backward leap
 
     ss_from = numpy.zeros(ns, dtype=int)
     ss_to = numpy.zeros(ns, dtype=int)
     for s in range(ns):
         if(s in s_e): continue
 
-        s_from_min = max(0, s - max_retreat)
-        if(s > 2):
-            s_from = random.randint(s_from_min, s-1)  # start of the transition
-        else:
-            s_from = 0
-        s_to = random.randint(s + 1, s + max_leap) + 1 # end of the transition (exclusive)
+        s_from_min = max(0, s - max_back)
+        s_from_max = max(0, s - min_back, s_from_min + 1)
+        s_to_max = min(ns,     s + max_leap)
+        s_to_min = min(ns - 1, s + min_leap, s_to_max - 1)
 
-        s_to = min(s_to, ns)
+        s_from = random.randint(s_from_min, s_from_max)  # start of the transition
+        s_to = random.randint(s_to_min, s_to_max) # end of the transition (exclusive)
 
         while(s_to < ns):
-            valid_leap = False
+            valid_leap = []
             for s_future in range(s + 1, s_to):
                 if(s_future not in s_e):
-                    valid_leap = True
-                    break
-            if(valid_leap):
+                    valid_leap.append(s_future)
+            if(len(valid_leap) > 1):  # At least one leap forward is valid
                 break
             s_to += 1
 
         ss_from[s] = s_from
         ss_to[s] = s_to
+        if(final_terminate):
+            valid_leap.append(ns - 1)
 
-        trans_ss[s, s_from:s_to] = random.uniform(0.20, 1, size=(s_to - s_from))
+        if(len(valid_leap) > 1):
+            while numpy.sum(trans_ss[s][valid_leap]) < 1.0e-3 or numpy.where(trans_ss[s] > 1.0e-3)[0].size < 2: # At least 2 transition
+                trans_ss[s, s_from:s_to] = numpy.clip(random.normal(size=(s_to - s_from)), 0.10, 1.0)
+        else:
+            while numpy.sum(trans_ss[s]) < 1.0e-3 or numpy.where(trans_ss[s] > 1.0e-3)[0].size < 2:
+                trans_ss[s, s_from:s_to] = numpy.clip(random.normal(size=(s_to - s_from)), 0.10, 1.0)
 
         # avoid self-loop
         trans_ss[s, s] /= 2.0

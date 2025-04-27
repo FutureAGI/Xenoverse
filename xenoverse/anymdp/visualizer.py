@@ -113,7 +113,9 @@ def anymdp_task_visualizer(task,
 
 if __name__ == '__main__':
     from xenoverse.anymdp import AnyMDPTaskSampler
-    ns = 16
+    ns = 32
     na = 5
     task = AnyMDPTaskSampler(ns, na, verbose=True)
-    anymdp_task_visualizer(task, need_ticks=False, file_path=f'./vis_anymdp_ns{ns}na{na}')
+    anymdp_task_visualizer(task, need_ticks=False, 
+                           need_lengends=False,
+                           file_path=f'./vis_anymdp_ns{ns}na{na}')

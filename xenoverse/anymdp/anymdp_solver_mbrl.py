@@ -18,8 +18,6 @@ class AnyMDPSolverMBRL(object):
         """
         self.ns = env.observation_space.n
         self.na = env.action_space.n
-        self.transition = env.transition_obs
-        self.reward = env.reward_obs
 
         self.est_r = numpy.zeros((self.ns, self.na, self.ns))
         self.vis_cnt = 0.01 * numpy.ones((self.ns, self.na, self.ns))
@@ -72,8 +70,10 @@ class AnyMDPSolverMBRL(object):
         if(terminated or truncated):
             self.update_estimator()
 
-    def policy(self, state):
+    def policy(self, state, is_test=False):
         # UCB Exploration
+        if(is_test):
+            return numpy.argmax(self.value_matrix[state])
         rnd_vec = random.uniform(0.0, 1.0, size=(self.na))
         return numpy.argmax(self.value_matrix[state] + self.b_mat[state] * rnd_vec)
     
@@ -84,4 +84,3 @@ class AnyMDPSolverMBRL(object):
         else:
             idx = self.s_0.index(s)
             self.s_0_cnt[idx] += 1
-        

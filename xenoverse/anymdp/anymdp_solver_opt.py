@@ -24,6 +24,9 @@ class AnyMDPSolverOpt(object):
 
     def q_solver(self, gamma=0.99):
         self.value_matrix = update_value_matrix(self.transition_matrix, self.reward_matrix, gamma, self.value_matrix)
+    
+    def learner(self, *args, **kwargs):
+        pass
 
-    def policy(self, state):
+    def policy(self, state, **kwargs):
         return numpy.argmax(self.value_matrix[self.inverse_state_mapping[state]])
