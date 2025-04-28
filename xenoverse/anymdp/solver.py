@@ -1,32 +1,65 @@
 import numpy
+import numpy as np
 from numpy import random
 from numba import njit
 import networkx as nx
 import scipy.stats as stats
+from scipy.stats import spearmanr
+from copy import deepcopy
 
-def graph_diameter(t_mat, threshold=1.0e-4):
-    G = nx.DiGraph()
-    ss_trans = numpy.sum(t_mat, axis=1)
-    ss_trans = ss_trans / numpy.sum(ss_trans, axis=1, keepdims=True)
-    
-    for i in range(len(ss_trans)):
-        for j in range(len(ss_trans)):
-            if(ss_trans[i][j] > threshold):
-                G.add_edge(i, j, weight=ss_trans[i][j])
-    if(not nx.is_strongly_connected(G)):
-        diameter = -1
+def normalized_mrr(scores1, scores2, k=None):
+    assert numpy.shape(scores1) == numpy.shape(scores2)
+    n = numpy.shape(scores1)[0]
+
+    if k is None:
+        k = n
     else:
-        diameter = nx.diameter(G)
-    return diameter
+        k = min(k, n)
 
-def task_diameter(task):
-    return graph_diameter(task['transition'])
+    indices1 = np.argsort(-scores1)
+    indices2 = np.argsort(-scores2)
+    indices1_rev = indices1[::-1]
+
+    ranks = np.zeros(n)
+    for i, idx in enumerate(indices2):
+        ranks[idx] = i + 1
+
+    invranks = np.zeros(n)
+    for i, idx in enumerate(indices1_rev):
+        invranks[idx] = i + 1
+
+    mrrmax = 0.0
+    mrrmin = 0.0
+    mrr = 0.0
+
+    for i in range(k):
+        idx = indices1[i]
+        mrrmax += 1.0 / (i + 1) ** 2
+        mrrmin += 1.0 / ((i + 1) * invranks[idx])
+        mrr += 1.0 / ((i + 1) * ranks[idx])
+
+    return (mrr - mrrmin) / (mrrmax - mrrmin)
+    
+def mean_mrr(X, Y, k=None):
+    if X.shape != Y.shape:
+        raise ValueError("X and Y must have the same shape")
+    if(X.ndim == 1):
+        return normalized_mrr(X, Y, k)
+    nmrrs = []
+
+    for i in range(X.shape[0]):
+        x_col = X[i]
+        y_col = Y[i]
+        nmrr = normalized_mrr(x_col, y_col)
+        nmrrs.append(nmrr)
+    return numpy.mean(nmrrs)
 
 @njit(cache=True)
 def update_value_matrix(t_mat, r_mat, gamma, vm, max_iteration=-1, is_greedy=True):
     diff = 1.0
     cur_vm = numpy.copy(vm)
     ns, na, _ = r_mat.shape
+    alpha = 1.0
     iteration = 0
     while diff > 1.0e-4 and (
             (max_iteration < 0) or 
@@ -39,159 +72,77 @@ def update_value_matrix(t_mat, r_mat, gamma, vm, max_iteration=-1, is_greedy=Tru
                 exp_q = 0.0
                 for sn in range(ns):
                     if(is_greedy):
-                        exp_q += t_mat[s,a,sn] * numpy.max(cur_vm[sn])
+                        exp_q += t_mat[s,a,sn] * (gamma * numpy.max(cur_vm[sn]) + r_mat[s, a, sn])
                     else:
-                        exp_q += t_mat[s,a,sn] * numpy.mean(cur_vm[sn])
-                cur_vm[s,a] = numpy.dot(r_mat[s,a], t_mat[s,a]) + gamma * exp_q
+                        exp_q += t_mat[s,a,sn] * (gamma * numpy.mean(cur_vm[sn]) + r_mat[s, a, sn])
+                cur_vm[s,a] += alpha * (exp_q - cur_vm[s,a])
+
         diff = numpy.sqrt(numpy.mean((old_vm - cur_vm)**2))
+        alpha = max(0.80 * alpha, 0.50)
     return cur_vm
 
-def get_final_transition(**task):
+def get_opt_trajectory_dist(s0, s0_prob, se, ns, na, transition, vm, K=8):
+    a_max = numpy.argmax(vm, axis=1)
+    i_indices = np.arange(ns)[:, None]
+    j_indices = np.arange(ns)
+    max_trans = numpy.copy(transition[i_indices, a_max[:, None], j_indices])
+    for s in se:
+        max_trans[s, s0] = s0_prob # s_e directly lead to s0
+
+    for _ in range(K):
+        max_trans = numpy.matmul(max_trans, max_trans)
+    gini_impurity = []
+    normal_entropy = []
+
+    for s in s0:
+        stable_prob = max_trans[s] + 1.0e-12 # calculation safety
+        gini_impurity.append(1.0 - numpy.sum(stable_prob * stable_prob))
+        normal_entropy.append(-numpy.sum(stable_prob * numpy.log(stable_prob)) / numpy.log(ns))
+
+    # Check gini impurity
+    return numpy.min(gini_impurity), numpy.min(normal_entropy)
+
+def check_valuefunction(task, verbose=False):
     t_mat = numpy.copy(task["transition"])
-    if(t_mat.shape[0] < 2):
-        return t_mat
-    
-    reset_dist = task["reset_states"]
-    reset_trigger = numpy.where(task["reset_triggers"] > 0)
 
-    for s in reset_trigger:
-        t_mat[s, :] = reset_dist
-
-    return t_mat
-
-def get_final_reward(**task):
     r_mat = numpy.copy(task["reward"])
-    if(r_mat.shape[0] < 2):
-        return r_mat
-    reset_trigger = numpy.where(task["reset_triggers"] > 0)
+    ns, na, _ = t_mat.shape
+    gamma = numpy.power(2, -1.0 / ns)
+    vm_opt = update_value_matrix(t_mat, r_mat, gamma, numpy.zeros((ns, na), dtype=float), is_greedy=True)
+    vm_rnd = update_value_matrix(t_mat, r_mat, gamma, numpy.zeros((ns, na), dtype=float), is_greedy=False)
 
-    r_mat[reset_trigger, :, :] = 0.0
+    # Get Average Reward
+    avg_vm_opt = vm_opt * (1.0 - gamma) * task["max_steps"]
+    avg_vm_rnd = vm_rnd * (1.0 - gamma) * task["max_steps"]
+    vm_diffs = []
 
-    return r_mat
-
-def check_transition(t_mat):
-    quality = -1
-    if(t_mat is None):
-        return quality
-    # acquire state - to - state distribution
-    ns = t_mat.shape[0]
-    log_ns = int(numpy.floor(numpy.log2(ns)))
-    ss_trans = numpy.sum(t_mat, axis=1)
-    ss_trans = ss_trans / numpy.sum(ss_trans, axis=1, keepdims=True)
-
-    for i in range(log_ns):
-        ss_trans = numpy.matmul(ss_trans, ss_trans)
-        ss_unreach = numpy.sum(ss_trans < 1.0e-6)
-        if(ss_unreach > 0):
-            quality = max(quality, i / log_ns + ss_unreach / ns / ns)
-    ss_unreach = numpy.sum(ss_trans < 1.0e-6, axis=1)
-    if(numpy.any(ss_unreach > 0)):
-        return 0
-    if(ns < 4):
-        return 1 # where states below 4, transition is all ok as long as strongly connected
-    return quality
-
-def check_transition_2(t_mat):
-    quality = -1
-    if(t_mat is None):
-        return quality
-    d = graph_diameter(t_mat)
-    # Not connected
-    print("diameter", d)
-
-    if(d < 0):
-        return 0
+    for s in task["s_0"]:
+        vm_diff = numpy.max(avg_vm_opt[s]) - numpy.max(avg_vm_rnd[s])
+        if(vm_diff < 2.0):
+            return False
+        vm_diffs.append(vm_diff)
     
-    ns = t_mat.shape[0]
-    d_H = 4.0 * numpy.sqrt(ns)
-    return d / d_H
+    # check the stationary distribution of the optimal value function
+    K = int(numpy.log2(task["max_steps"])) + 1
+    gini, ent = get_opt_trajectory_dist(
+                            deepcopy(task["s_0"]), 
+                            numpy.copy(task["s_0_prob"]),
+                            deepcopy(task["s_e"]), 
+                            ns, na, 
+                            numpy.copy(t_mat), 
+                            vm_opt, 
+                            K=K)
     
-def check_valuefunction(t_mat, r_mat):
-    if(t_mat is None or r_mat is None):
-        return -100
-    ns, na, _ = r_mat.shape
-    if(ns < 2): # For bandit problem, only check rewards
-        if(numpy.std(r_mat) > 1.0e-3):
-            return 1
-        else:
-            return -100
-
-    vm_l = update_value_matrix(t_mat, r_mat, 0.99, numpy.zeros((ns, na), dtype=float), max_iteration=5)
-    vm_s = update_value_matrix(t_mat, r_mat, 0.70, numpy.zeros((ns, na), dtype=float), max_iteration=5)
-    vm_r = update_value_matrix(t_mat, r_mat, 0.99, numpy.zeros((ns, na), dtype=float), max_iteration=5, is_greedy=False)
-
-    vm_l = numpy.max(vm_l, axis=1)
-    vm_s = numpy.max(vm_s, axis=1)
-    vm_r = numpy.max(vm_r, axis=1)
-
-    vbase = numpy.sqrt(numpy.mean(vm_r ** 2))
-
-    wht = 1.5
-
-    corr_ls, _ = stats.spearmanr(vm_l, vm_s)
-    corr_lr, _ = stats.spearmanr(vm_l, vm_r)
-    qdelta = wht * numpy.tanh(numpy.mean((vm_l - vm_r)) / vbase / wht)
-    qstd = wht * numpy.tanh(numpy.std(vm_l) / vbase / wht)
-
-    if(qstd < 0.1): # value function too flat
-        return -100
-
-    if(numpy.isnan(corr_lr)):
-        corr_lr = 1
-    if(numpy.isnan(corr_ls)):
-        corr_ls = 1
-
-    q_random = numpy.log((1 + 1.0e-10 - corr_lr))
-    q_longshort = numpy.log((1 + 1.0e-10 - corr_ls))
-
-    quality = q_random + q_longshort + qdelta + qstd
-
-    return quality
-
-
-def check_task_trans(task, transition_check_type=1):
-    """
-    Check the quality of the task
-    Requiring: Q value is diverse
-               State is connected
-               Route is complex
-    Returns:
-        float: transition quality
-        float: value function quality
-    """
-    if(task is None or 
-       not "transition" in task or 
-       not "reset_states" in task or
-       not "reset_triggers" in task):
-        return -1
-    if(task["transition"].shape[0] < 2):
-        return 1
-    t_mat = get_final_transition(**task)
-    if(transition_check_type == 1):
-        return check_transition(t_mat)
-    elif(transition_check_type == 2):
-        return check_transition_2(t_mat)
-    else:
-        raise ValueError(f"Unknown transition check type: {transition_check_type}")
-
-
-def check_task_rewards(task):
-    """
-    Check the quality of the task
-    Requiring: Q value is diverse
-               State is connected
-               Route is complex
-    Returns:
-        float: transition quality
-        float: value function quality
-    """
-    if(task is None or 
-       not "transition" in task or 
-       not "reset_states" in task or
-       not "reset_triggers" in task or 
-       not "reward" in task):
-        return -100
-
-    t_mat = get_final_transition(**task)
-    r_mat = get_final_reward(**task)
-    return check_valuefunction(t_mat, r_mat)
+    t_mat_sum = numpy.sum(t_mat, axis=-1)
+    error = (t_mat_sum - 1.0)**2
+    if(len(task["s_e"]) > 0):
+        error[task["s_e"]] = 0.0
+    if((error >= 1.0e-6).any()):
+        if(verbose):
+            print("Transition Matrix Error: ", numpy.where(error>=1.0e-6))
+        return False
+    
+    vm_diffs = numpy.mean(vm_diffs)
+    if(verbose):
+        print("Value Diff: {:.4f}, Gini Impurity: {:.4f}, Normalized Entropy: {:.4f}, final_goal_terminate: {}".format(vm_diffs, gini,ent, task["final_goal_terminate"]))
+    return gini > 0.70 and ent > 0.35

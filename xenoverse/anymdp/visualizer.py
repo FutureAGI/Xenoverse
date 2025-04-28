@@ -4,75 +4,118 @@ AnyMDP Task Visualization
 
 import numpy as np
 import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
-import matplotlib.colors as mcolors
-import matplotlib.cm as cm
- 
+import matplotlib.patches as mpatches
+from xenoverse.anymdp.solver import update_value_matrix
 
-def task_visualizer(task, show_gui=True, file_path=None):
-    if("state_embedding" not in task):
-        raise Exception("No state embedding found in task")
-    
-    ns, sv = task["state_embedding"].shape
-    ns1, na, ns2 = task["reward"].shape
-    ns3, na1, ns4 = task["transition"].shape
 
-    assert ns == ns1 == ns2 == ns3 == ns4
-    assert na == na1
+def anymdp_task_visualizer(task, 
+                    need_lengends=True, 
+                    need_ticks=True,
+                    show_gui=True, 
+                    file_path=None):
+    # 创建一个图形和坐标轴
+    fig, ax = plt.subplots(figsize=(8, 8))
 
-    projection_matrix = np.random.rand(sv, 3)
+    ns = task["ns"]
+    na = task["na"]
 
-    s= task["state_embedding"]
-    s_min = s.min(axis=0)
-    s_max = s.max(axis=0)
-    coordinates = np.matmul((s - s_min) / (s_max - s_min), projection_matrix)
-    link_strength_normalized = np.mean(task["transition"], axis=1)
-    rewards = np.mean(task["reward"], axis=(0, 1))
+    transition = task["transition"]
+    reward = task["reward"]
 
-    fig = plt.figure()
-    ax = fig.add_subplot(111, projection='3d')
-    norm = mcolors.Normalize(vmin=np.min(rewards), vmax=np.max(rewards))
-    cmap = cm.viridis
+    s_0 = task["s_0"]
+    s_e = task["s_e"]
 
-    ax.scatter(coordinates[:, 0], coordinates[:, 1], coordinates[:, 2], 
-                         c=cmap(norm(rewards)), marker='o')
+    state_mapping = task["state_mapping"]
+    state_mapping = [str(state_mapping[i]) for i in range(ns)]
 
-    sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
-    sm.set_array([])
-    cbar = fig.colorbar(sm, ax=ax, shrink=0.2, aspect=5)
-    cbar.set_label('Rewards')
+    vm = np.zeros((ns, na))
+    vm = update_value_matrix(task["transition"], task["reward"], 0.99, vm)
+    vsm = np.max(vm, axis=-1)
 
-    for i in range(ns):
-        for j in range(ns):
-            if i != j and link_strength_normalized[i,j] > 0.1:  
-                x_values = [coordinates[i, 0], coordinates[j, 0]]
-                y_values = [coordinates[i, 1], coordinates[j, 1]]
-                z_values = [coordinates[i, 2], coordinates[j, 2]]
-                c = max(0, float(1 - 2 * link_strength_normalized[i, j]))
-                ax.plot(x_values, y_values, z_values, color=(c,c,c), linewidth=2)
-       
-    ax.set_title('AnyMDP Task Visualization')
+    if(need_ticks):
+        ax.set_xticks(np.arange(- 0.5, ns + 0.5))
+        ax.set_yticks(np.arange(- 0.5, ns + 0.5))
+        ax.set_xticklabels([''] + state_mapping)
+        ax.set_yticklabels([''] + state_mapping)
+    else:
+        ax.set_xticks([])
+        ax.set_yticks([])
 
-    ax.set_xticklabels([])
-    ax.set_yticklabels([])
-    ax.set_zticklabels([])
-    
-    ax.xaxis.set_ticks_position('none')
-    ax.yaxis.set_ticks_position('none')
-    ax.zaxis.set_ticks_position('none')
+    ax.set_xlim(0, ns)
+    ax.set_ylim(0, ns)
 
-    ax.xaxis.set_pane_color((1.0, 1.0, 1.0, 0.0))
-    ax.yaxis.set_pane_color((1.0, 1.0, 1.0, 0.0))
-    ax.zaxis.set_pane_color((1.0, 1.0, 1.0, 0.0))
-    
-    ax.grid(False)
-    if show_gui:
+    ax.tick_params(axis='both', which='both', length=0)
+
+    trans_ss = np.mean(transition, axis=1)
+    r_position = np.mean(reward, axis=(0, 1))
+
+    for i in range(ns): # State From
+        for j in range(ns): # State To
+            alpha = min(trans_ss[i, j] * 5.0, 1.0)
+            rect = plt.Rectangle((j, i), 1, 1, facecolor='grey', alpha=alpha, edgecolor='none')
+            ax.add_patch(rect)
+
+    # Start states
+    for s in s_0:
+        rect = plt.Rectangle((0, s), ns, 1, facecolor='green', alpha=0.25, edgecolor='none')
+        ax.add_patch(rect)
+
+    # End states
+    for s in s_e:
+        if(s >= ns-1):
+            color = 'blue'
+            alpha = 0.40
+        else:
+            color = 'red'
+            alpha = 0.20
+
+        rect = plt.Rectangle((0, s), ns, 1, facecolor=color, alpha=alpha, edgecolor='none')
+        ax.add_patch(rect)
+        rect = plt.Rectangle((s, 0), 1, ns, facecolor=color, alpha=alpha, edgecolor='none')
+        ax.add_patch(rect)
+
+    ax.set_xlabel('State ($t+1$)', fontsize=12, fontweight='bold')
+    ax.set_ylabel('State ($t$)', fontsize=12, fontweight='bold')
+
+    lw = 24 / (ns + 16)
+    for i in range(ns + 1):
+        ax.axhline(y=i, color='black', linewidth=lw)
+        ax.axvline(x=i, color='black', linewidth=lw)
+
+    # Plot the value function
+    nonpitfalls = np.array([i for i in range(ns) if i not in s_e])
+
+    v_max = np.max(vsm[nonpitfalls])
+    v_min = np.min(vsm[nonpitfalls])
+
+    scale = (v_max - v_min) * 0.05
+    ax_v = ax.twinx()
+    ax_v.set_ylim(v_min - scale, v_max + scale)
+    ax_v.plot(nonpitfalls + 0.5, vsm[nonpitfalls], color='black', marker='o', linestyle='-', linewidth=2.5)
+
+    ax_v.set_ylabel('State Value Function', fontsize=12, fontweight='bold', color='black')
+    ax_v.tick_params(axis='y', labelcolor='black')
+
+    if(need_lengends):
+        transition_patch = mpatches.Patch(color='grey', alpha=0.5, label='$\mathbb{E}_{a}[P(s_t,a,s_{t+1})]$')
+        born_patch = mpatches.Patch(color='green', alpha=0.2, label='$\mathcal{S}_0$')
+        pitfall_patch = mpatches.Patch(color='red', alpha=0.2, label='$\mathcal{S}_E$ (pitfalls)')
+        goal_patch = mpatches.Patch(color='blue', alpha=0.4, label='$\mathcal{S}_E$ (goals)')
+
+        ax.legend(handles=[transition_patch, born_patch, pitfall_patch, goal_patch], loc='center left', fontsize=10)
+
+    # Show and save
+    if(file_path is not None):
+        plt.savefig(file_path + '.pdf', format='pdf')
+
+    if(show_gui):
         plt.show()
-    if file_path is not None:
-        plt.savefig(file_path)
-
 
 if __name__ == '__main__':
-    from l3c.anymdp import AnyMDPTaskSampler
-    task = AnyMDPTaskSampler(128, 5, keep_metainfo=True)
-    task_visualizer(task)
+    from xenoverse.anymdp import AnyMDPTaskSampler
+    ns = 32
+    na = 5
+    task = AnyMDPTaskSampler(ns, na, verbose=True)
+    anymdp_task_visualizer(task, need_ticks=False, 
+                           need_lengends=False,
+                           file_path=f'./vis_anymdp_ns{ns}na{na}')
