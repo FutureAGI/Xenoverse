@@ -33,22 +33,8 @@ class HVACSolverGTPID(object):
 
     def policy(self, observation):
 
-        if isinstance(self.target_temperature, (list, numpy.ndarray)) and numpy.array(observation).ndim == 1:
-            target_temp_arr = numpy.array(self.target_temperature)
-            if target_temp_arr.ndim > 0 and target_temp_arr.shape[0] != numpy.array(observation).shape[0] :
-                
-                if target_temp_arr.size == 1 :
-                    effective_target_temp = target_temp_arr.item()
-                else: 
 
-                    effective_target_temp = numpy.mean(target_temp_arr) 
-            elif target_temp_arr.ndim == 0 : # scalar
-                effective_target_temp = target_temp_arr
-            else: 
-                effective_target_temp = target_temp_arr
-
-        else: 
-            effective_target_temp = self.target_temperature
+        effective_target_temp = self.target_temperature
 
         current_observation_arr = numpy.array(observation)
 
