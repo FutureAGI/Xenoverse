@@ -2,6 +2,7 @@ import sys
 import gymnasium as gym
 from gymnasium.spaces import Dict, Box, Discrete
 import numpy
+import numbers
 import numpy as np
 from copy import deepcopy
 
@@ -13,11 +14,13 @@ class HVACEnv(gym.Env):
                  sec_per_iter=0.2,
                  set_lower_bound=16,
                  set_upper_bound=32,
-                 verbose=False):
+                 verbose=False,
+                 action_space_format='box'):
         self.observation_space = gym.spaces.Box(low=-273, high=273, shape=(1,), dtype=numpy.float32)
 
         # 前 n_coolers 个元素对应 'switch'，后 n_coolers 个元素对应 'value'
-        self.action_space = gym.spaces.Box(low=0, high=1, shape=(2,), dtype=numpy.float32) 
+ 
+        self.action_space = None
 
 
         self.max_steps = max_steps
@@ -35,6 +38,7 @@ class HVACEnv(gym.Env):
         self.upper_bound = set_upper_bound
         self.verbose = verbose
         self.warning_count_tolerance = 5
+        self.action_space_format = action_space_format
 
     def set_task(self, task):
         for key in task:
@@ -44,6 +48,15 @@ class HVACEnv(gym.Env):
         # cacluate topology
         n_coolers = len(self.coolers)
         n_sensors = len(self.sensors)
+        # 根据格式创建动作空间
+        
+        if self.action_space_format == 'dict':
+            self.action_space = Dict({
+                "switch": gym.spaces.MultiBinary(n_coolers),
+                "value": gym.spaces.Box(low=0, high=1, shape=(n_coolers,), dtype=np.float32)
+            })
+        else:  # 默认使用Box格式
+            self.action_space = gym.spaces.Box(low=0, high=1, shape=(2*n_coolers,), dtype=numpy.float32) # Placeholder shape
 
         self.cooler_topology = numpy.zeros((n_coolers, n_coolers))
         self.cooler_sensor_topology = numpy.zeros((n_coolers, n_sensors))
@@ -65,7 +78,6 @@ class HVACEnv(gym.Env):
         self.observation_space = gym.spaces.Box(low=-273, high=273, shape=(n_sensors,), dtype=numpy.float32)
 
 
-        self.action_space = gym.spaces.Box(low=0, high=1, shape=(2*n_coolers,), dtype=numpy.float32) 
         
     def _get_obs(self):
          return [sensor(self.state, self.t) for sensor in self.sensors]
@@ -213,7 +225,12 @@ class HVACEnv(gym.Env):
 
     def step(self, action):
 
-        action = self._unflatten_action(action)
+        # 处理不同格式的动作输入
+        if isinstance(self.action_space, Dict):
+
+            action = action
+        else:
+            action = self._unflatten_action(action)
 
         self.episode_step += 1
         equip_heat, chtc_array, powers = self.update_states(action, dt=self.sec_per_iter, n=self.iter_per_step)
@@ -238,8 +255,11 @@ class HVACEnv(gym.Env):
 
             cool_power = round(np.mean(info.get("cool_power", 0)),4)
             heat_power = round(np.mean(info.get("heat_power", 0)),4)
-            print(f"step:{self.episode_step}, reward:{reward}, terminated:{terminated},\nmax-temperature:{numpy.max(observation)}, avg-temperature:{numpy.mean(observation)}, avg-power:{average_power:.5f}, ambient_temperature:{self.ambient_temp}, cool_power:{cool_power}, heat_power:{heat_power}\n")
-                
+            fail_step_percrentage = info["fail_step_percrentage"] if isinstance(info["fail_step_percrentage"], numbers.Real) else 0
+            info_total = f"energy_cost: {round(info.get('energy_cost', 0),4)}, target_cost: {round(info.get('target_cost', 0),4)}, switch_cost: {round(info.get('switch_cost', 0),4)},cool_power: {cool_power}, heat_power: {heat_power}"
+            print(f"Step {self.episode_step} | fail_step_percrentage:{fail_step_percrentage} | Reward: {reward} | {info_total}| cool_power: {cool_power:.2f} | heat_power:{heat_power:.2f} ", flush=True)
+            
+ 
         return observation, reward, terminated, truncated, info
 
     def sample_action(self, mode="random"):
@@ -251,8 +271,14 @@ class HVACEnv(gym.Env):
             raise ValueError(f"Unsupported mode: {mode}")
 
     def _random_action(self):
-        return self.action_space.sample()
-
+        if isinstance(self.action_space, Dict):
+            return {
+                "switch": self.action_space["switch"].sample(),
+                "value": self.action_space["value"].sample()
+            }
+        else:
+            return self.action_space.sample()
+    
     def _pid_action(self, pid_params=None):
         # Construct the flattened action array
         action = np.zeros(self.action_space.shape, dtype=self.action_space.dtype)

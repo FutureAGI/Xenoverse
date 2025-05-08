@@ -29,15 +29,53 @@ class HVACSolverGTPID(object):
         self.kd = 5.0e-3
         self.delta_t = self.sec_per_step / 60
 
-    def policy(self, observation):
-        diff = self.target_temperature - numpy.array(observation)
-        last_diff = self.target_temperature - self.last_observation
-        self.acc_diff += diff
 
-        d_e =  - (self.kp * diff - self.kd * (diff - last_diff) / self.delta_t + self.ki * self.acc_diff)
-        action = numpy.matmul(d_e, self.corr_sensor_cooler)
-        switch = (action > -0.05).astype('int8')
-        value = numpy.clip(action, 0.0, 1.0)
-        self.last_action = action
-        self.last_observation = numpy.copy(observation)
-        return {'switch': switch, 'value': value}
+
+    def policy(self, observation):
+
+        if isinstance(self.target_temperature, (list, numpy.ndarray)) and numpy.array(observation).ndim == 1:
+            target_temp_arr = numpy.array(self.target_temperature)
+            if target_temp_arr.ndim > 0 and target_temp_arr.shape[0] != numpy.array(observation).shape[0] :
+                
+                if target_temp_arr.size == 1 :
+                    effective_target_temp = target_temp_arr.item()
+                else: 
+
+                    effective_target_temp = numpy.mean(target_temp_arr) 
+            elif target_temp_arr.ndim == 0 : # scalar
+                effective_target_temp = target_temp_arr
+            else: 
+                effective_target_temp = target_temp_arr
+
+        else: 
+            effective_target_temp = self.target_temperature
+
+        current_observation_arr = numpy.array(observation)
+
+        # diff calculation
+
+        diff = effective_target_temp - current_observation_arr
+
+        if self.last_observation.shape != current_observation_arr.shape:
+            self.last_observation = numpy.zeros_like(current_observation_arr) # Re-initialize if shape mismatch
+
+        last_diff = effective_target_temp - self.last_observation
+
+        # Ensure self.acc_diff has the same shape as diff
+        if self.acc_diff.shape != diff.shape:
+            self.acc_diff = numpy.zeros_like(diff) # Re-initialize if shape mismatch
+        self.acc_diff += diff
+        # d_e calculation: This seems to result in a per-sensor error signal vector
+        d_e = - (self.kp * diff - self.kd * (diff - last_diff) / self.delta_t + self.ki * self.acc_diff)
+        action_values_continuous = numpy.matmul(d_e, self.corr_sensor_cooler)
+        switch_continuous = (action_values_continuous > -0.05).astype(numpy.float32)
+        # Value part: Clipped continuous values
+        value_clipped = numpy.clip(action_values_continuous, 0.0, 1.0)
+        self.last_action = numpy.concatenate((switch_continuous, value_clipped)) # Store the flat action
+        self.last_observation = numpy.copy(current_observation_arr)
+        n_coolers = len(self.coolers)
+        flat_action = numpy.zeros(2 * n_coolers, dtype=numpy.float32)
+        flat_action[:n_coolers] = switch_continuous
+        flat_action[n_coolers:] = value_clipped
+
+        return flat_action
