@@ -2,6 +2,7 @@ import sys
 import gymnasium as gym
 from gymnasium.spaces import Dict, Box, Discrete
 import numpy
+import numbers
 import numpy as np
 from copy import deepcopy
 
@@ -13,18 +14,22 @@ class HVACEnv(gym.Env):
                  sec_per_iter=0.2,
                  set_lower_bound=16,
                  set_upper_bound=32,
-                 verbose=False):
+                 verbose=False,
+                 action_space_format='box'):
         self.observation_space = gym.spaces.Box(low=-273, high=273, shape=(1,), dtype=numpy.float32)
-        self.action_space = Dict({
-                "switch": gym.spaces.MultiBinary(1, seed=42),
-                "value": gym.spaces.Box(low=0, high=1, shape=(1,), dtype=numpy.float32)
-        })
+
+        # 前 n_coolers 个元素对应 'switch'，后 n_coolers 个元素对应 'value'
+ 
+        self.action_space = None
+
+
         self.max_steps = max_steps
         self.failure_upperbound = failure_upperbound
         self.failure_reward = -100
-        self.energy_reward_wht = -0.375  # ranging from 0.0 to -0.375
-        self.switch_reward_wht = -0.375  # ranging from 0.0 to -0.375
-        self.target_reward_wht = -0.25  # ranging from 0.0 to -2.00
+
+        self.energy_reward_wht = -0.45  # ranging from 0.0 to -0.375
+        self.switch_reward_wht = -0.15  # ranging from 0.0 to -0.375
+        self.target_reward_wht = -0.4  # ranging from 0.0 to -2.00
         self.base_reward = 1.0 # survive bonus
         self.iter_per_step = iter_per_step
         self.sec_per_iter = sec_per_iter
@@ -33,6 +38,7 @@ class HVACEnv(gym.Env):
         self.upper_bound = set_upper_bound
         self.verbose = verbose
         self.warning_count_tolerance = 5
+        self.action_space_format = action_space_format
 
     def set_task(self, task):
         for key in task:
@@ -42,6 +48,15 @@ class HVACEnv(gym.Env):
         # cacluate topology
         n_coolers = len(self.coolers)
         n_sensors = len(self.sensors)
+        # 根据格式创建动作空间
+        
+        if self.action_space_format == 'dict':
+            self.action_space = Dict({
+                "switch": gym.spaces.MultiBinary(n_coolers),
+                "value": gym.spaces.Box(low=0, high=1, shape=(n_coolers,), dtype=np.float32)
+            })
+        else:  # 默认使用Box格式
+            self.action_space = gym.spaces.Box(low=0, high=1, shape=(2*n_coolers,), dtype=numpy.float32) # Placeholder shape
 
         self.cooler_topology = numpy.zeros((n_coolers, n_coolers))
         self.cooler_sensor_topology = numpy.zeros((n_coolers, n_sensors))
@@ -61,11 +76,9 @@ class HVACEnv(gym.Env):
 
         # observation space and action space
         self.observation_space = gym.spaces.Box(low=-273, high=273, shape=(n_sensors,), dtype=numpy.float32)
-        self.action_space = Dict({
-                "switch": gym.spaces.MultiBinary(n_coolers, seed=42),
-                "value": gym.spaces.Box(low=0, high=1, shape=(n_coolers,), dtype=numpy.float32)
-        })
 
+
+        
     def _get_obs(self):
          return [sensor(self.state, self.t) for sensor in self.sensors]
     
@@ -174,8 +187,51 @@ class HVACEnv(gym.Env):
         
         return (self.base_reward + target_cost + switch_cost + energy_cost,  
                 False, info)
+    
+    def _unflatten_action(self, action_flat):
+        """Converts the flattened Box action back to the dictionary format."""
+        if not isinstance(action_flat, np.ndarray):
+            action_flat = np.array(action_flat)
+        n_coolers = len(self.coolers)
+        # Ensure action_flat has the correct shape
+        expected_shape = (n_coolers * 2,)
+        if action_flat.shape != expected_shape:
+  
+             # Attempt to reshape if it's a single vector environment's output
+             if action_flat.ndim == 1 and action_flat.size == expected_shape[0]:
+                  action_flat = action_flat.reshape(expected_shape)
+             # Handle potential batch dimension from vectorized environments
+             elif action_flat.ndim == 2 and action_flat.shape[0] == 1 and action_flat.shape[1] == expected_shape[0]:
+                  action_flat = action_flat.reshape(expected_shape)
+
+             else:
+                  raise ValueError(f"Received flattened action with unexpected shape {action_flat.shape}. Expected {expected_shape}.")
+
+
+        switch_continuous = action_flat[:n_coolers]
+        value_continuous = action_flat[n_coolers:]
+
+        # Threshold switch part (e.g., > 0.5 is ON)
+        switch_binary = (switch_continuous > 0.5).astype(np.int8)
+
+        # Clip value part to ensure it's within [0, 1] (Box space should handle bounds, but good practice)
+        value_clipped = np.clip(value_continuous, 0.0, 1.0)
+
+        action_dict = {
+            "switch": switch_binary,
+            "value": value_clipped.astype(np.float32)
+        }
+        return action_dict
 
     def step(self, action):
+
+        # 处理不同格式的动作输入
+        if isinstance(self.action_space, Dict):
+
+            action = action
+        else:
+            action = self._unflatten_action(action)
+
         self.episode_step += 1
         equip_heat, chtc_array, powers = self.update_states(action, dt=self.sec_per_iter, n=self.iter_per_step)
         observation = self._get_obs()
@@ -196,7 +252,14 @@ class HVACEnv(gym.Env):
                 })
 
         if self.verbose:
-            print(f"step:{self.episode_step}, reward:{reward}, terminated:{terminated},\nmax-temperature:{numpy.max(observation)}, avg-temperature:{numpy.mean(observation)}, avg-power:{average_power:.5f}, ambient_temperature:{self.ambient_temp}\n")
+
+            cool_power = round(np.mean(info.get("cool_power", 0)),4)
+            heat_power = round(np.mean(info.get("heat_power", 0)),4)
+            fail_step_percrentage = info["fail_step_percrentage"] if isinstance(info["fail_step_percrentage"], numbers.Real) else 0
+            info_total = f"energy_cost: {round(info.get('energy_cost', 0),4)}, target_cost: {round(info.get('target_cost', 0),4)}, switch_cost: {round(info.get('switch_cost', 0),4)},cool_power: {cool_power}, heat_power: {heat_power}"
+            print(f"Step {self.episode_step} | fail_step_percrentage:{fail_step_percrentage} | Reward: {reward} | {info_total}| cool_power: {cool_power:.2f} | heat_power:{heat_power:.2f} ", flush=True)
+            
+ 
         return observation, reward, terminated, truncated, info
 
     def sample_action(self, mode="random"):
@@ -208,23 +271,44 @@ class HVACEnv(gym.Env):
             raise ValueError(f"Unsupported mode: {mode}")
 
     def _random_action(self):
-        return self.action_space.sample()
-
+        if isinstance(self.action_space, Dict):
+            return {
+                "switch": self.action_space["switch"].sample(),
+                "value": self.action_space["value"].sample()
+            }
+        else:
+            return self.action_space.sample()
+    
     def _pid_action(self, pid_params=None):
-        action = np.zeros(self.action_space.shape)
-        
-        for i in range(len(self.coolers)):
-            # 开关状态强制设为1 (运行状态)
-            action[2*i] = 1.0  # 开关位
-            
+        # Construct the flattened action array
+        action = np.zeros(self.action_space.shape, dtype=self.action_space.dtype)
+        n_coolers = len(self.coolers)
+
+        # Set switch part (first n_coolers elements) - Treat as continuous 1.0 for "ON"
+        action[:n_coolers] = 1.0
+        # Set value part (next n_coolers elements)
+        target_temp = self.target_temperature 
+        lb = self.lower_bound
+        ub = self.upper_bound
+
+        if isinstance(self.target_temperature, (np.ndarray, list)):
+            target_temp = np.mean(self.target_temperature)
+
+        else:
             target_temp = self.target_temperature
-            
-            # 计算对应动作值 (需标准化到0-1)
-            lb = self.lower_bound
-            ub = self.upper_bound
+
+        # Calculate desired value based on control type (assuming Temperature control for PID example)
+        if self.control_type.lower() == 'temperature':
+
             a = (target_temp - lb) / (ub - lb)
-            a = np.clip(a, 0.0, 1.0)  # 限制在合法范围
-                
-            action[2*i + 1] = a  # 温度设定位
-        
+            a = np.clip(a, 0.0, 1.0) # Clip to valid 0-1 range
+        elif self.control_type.lower() == 'power':
+
+             a = 0.5 # Placeholder for power control PID
+        else:
+            a = 0.0 # Default if control type unknown
+
+        action[n_coolers:] = a
+
         return action
+

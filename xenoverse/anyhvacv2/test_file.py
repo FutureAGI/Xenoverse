@@ -1,5 +1,6 @@
 if __name__ == "__main__":
-    import numpy
+    import numpy 
+    import numbers
     from xenoverse.anyhvacv2.anyhvac_env_vis import HVACEnvVisible, HVACEnv
     from xenoverse.anyhvacv2.anyhvac_sampler import HVACTaskSampler
     from xenoverse.anyhvacv2.anyhvac_solver import HVACSolverGTPID
@@ -14,7 +15,7 @@ if __name__ == "__main__":
     
     except FileNotFoundError:
         print("Sampling new HVAC tasks...")
-        task = HVACTaskSampler()
+        task = HVACTaskSampler(control_type='Temperature')
         with open(TASK_CONFIG_PATH, "wb") as f:
             pickle.dump(task, f)
         print(f"... Saved new task config to {TASK_CONFIG_PATH}")
@@ -40,16 +41,18 @@ if __name__ == "__main__":
         # print("sensors - ", obs, "\nactions - ", action, "\nrewards - ", reward, "ambient temperature - ", env.ambient_temp)
         if steps % 100 == 0:
             mean_reward = numpy.mean(current_stage)
+            cool_power = round(numpy.mean(info.get("cool_power", 0)),4)
+            heat_power = round(numpy.mean(info.get("heat_power", 0)),4)
+
+            fail_step_percrentage = info["fail_step_percrentage"] if isinstance(info["fail_step_percrentage"], numbers.Real) else 0
+            info_total = f"energy_cost: {round(info.get('energy_cost', 0),4)}, target_cost: {round(info.get('target_cost', 0),4)}, switch_cost: {round(info.get('switch_cost', 0),4)},cool_power: {cool_power}, heat_power: {heat_power}"
             
-            # 计算各信息字段均值
-            info_means = {
-                key: info_sums[key] / info_counts[key] 
-                for key in info_sums
-            }
+
             
             # 格式化输出
-            info_str = " | ".join([f"{k}:{v:.4f}" for k,v in info_means.items()])
-            print(f"Step {steps} | Reward: {mean_reward:.2f} | {info_str}", flush=True)
+
+
+            print(f"Step {steps} | fail_step_percrentage:{fail_step_percrentage} | Reward: {mean_reward:.2f} | {info_total}| cool_power: {cool_power:.2f} | heat_power:{heat_power:.2f} ", flush=True)
             
             # 重置统计量
             current_stage = []
