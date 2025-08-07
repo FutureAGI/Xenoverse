@@ -1,4 +1,4 @@
-#   Copyright (c) 2018 PaddlePaddle Authors. All Rights Reserved.
+#   Copyright (c) Xenoverse. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,4 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-__version__ = '0.1.5'
+from gymnasium.envs.registration import register
+from xenoverse.metacontrol.random_cartpole import RandomCartPoleEnv
+from xenoverse.metacontrol.random_cartpole import sample_cartpole
+
+
+register(
+    id='random-cartpole-v0',
+    entry_point='xenoverse.metacontrol.random_cartpole:RandomCartPoleEnv',
+    order_enforce=False,
+    disable_env_checker=True,
+    kwargs={}
+)
