@@ -3,7 +3,7 @@ from numpy import random
 from copy import deepcopy
 from xenoverse.utils import pseudo_random_seed
 from xenoverse.anymdp.solver import check_valuefunction, update_value_matrix
-from xenoverse.utils import RandomFourier
+from xenoverse.utils import RandomFourier, random_partition
 
 eps = 1e-10
 
@@ -266,3 +266,89 @@ def sample_bandit(na):
            "s_0": numpy.array([0]),
            "s_e": numpy.array([]),
            "s_0_prob": numpy.array([1.0])}
+
+def sample_sparse_matrix(n, m, k, seed=None):
+    if k <= 0 or k > n:
+        raise ValueError("k must satisfy 0 < k <= n")
+    
+    if seed is not None:
+        numpy.random.seed(seed)
+    
+    matrix = numpy.zeros((n, m, n))
+    arr = numpy.arange(n)
+        
+    for i in range(n):
+        for j in range(m):
+            sample = random.choice(arr, size=k, replace=False)
+            partition = random_partition(k)
+            matrix[i, j, sample] = partition
+    
+    return matrix
+
+def sample_garnet(ns, na, max_steps, b, sigma=0.2, r_mean=0.0, verbose=False):
+    task = dict()
+    assert ns >=8, "ns must be at least 8 for MDP"
+
+    s_0_prob = numpy.array([1.0], dtype=int)
+    s_0 = [0]
+    transition = sample_sparse_matrix(ns, na, b)
+
+    task.update({"s_0": numpy.copy(s_0),
+                 "s_0_prob": numpy.copy(s_0_prob),
+                 "s_e": numpy.array([]),
+                 "transition": numpy.copy(transition),
+                 "final_goal_terminate": False})
+
+    reward = random.normal(size=(ns, na, ns)) * sigma + r_mean
+    reward_noise = numpy.zeros((ns, na, ns), dtype=float)
+
+    task.update({"transition": numpy.copy(transition),
+                 "reward": numpy.copy(reward),
+                 "reward_noise": numpy.copy(reward_noise)})
+
+    return task
+
+def sample_procon_stage_1(ns, na, l, cyc):
+    """
+    Sample a ProCon stage 1 task with given parameters
+    """
+    assert ns >= 8, "ns must be at least 8 for ProCon stage 1" 
+    assert na >= 2, "na must be at least 2 for ProCon stage 1"
+    assert l >= 2, "l must be at least 2 for ProCon stage 1"
+    assert cyc >= 2 and cyc < ns, "cyc must be at least 2 and at most ns - 1 for ProCon stage 1"
+    state_seq = []
+    s_0 = random.randint(0, ns)
+    s_0_prob = numpy.zeros(ns, dtype=float)
+    s_0_prob[s_0] = 1.0
+    state_seq.append(s_0)
+    state_all = list(range(ns))
+    state_left = list(range(ns))
+    state_left.remove(s_0)
+    opt_transition = numpy.zeros((ns, ns), dtype=float)
+    edges = []
+    s = prev_s
+
+    while True:
+        prev_s = state_seq[-1]
+        while s in state_seq[-cyc:]:
+            s = random.choice(state_left)
+        opt_transition[prev_s, s] = random.uniform(0.01, 1.0)
+        state_seq.append(s)
+        state_left.remove(s)
+        edges.append((prev_s, s))
+        if(s in state_seq[:-(cyc + 1)]):
+            break
+
+    state_idx = deepcopy(state_seq)
+    while len(state_left) > 0:
+        s = random.choice(state_left)
+        while True:
+            next_s = random.choice(state_all)
+            opt_transition[s, next_s] = random.uniform(0.01, 1.0)
+            edges.append((prev_s, s))
+            state_left.remove(s)
+            state_idx.append(s)
+            if next_s in state_seq:
+                break
+
+    return opt_transition, edges, s_0, s_0_prob, state_seq
