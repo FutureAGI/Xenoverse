@@ -28,17 +28,20 @@ Import and create the AnyHVAC environment:
 import gymnasium as gym
 import xenoverse.anyhvac
 
-env = gym.make("anyhvac-visualizer-v0", # use `anyhvac-v0` for non-visualizer version
+env = gym.make("anyhvac-visualizer-v1", # use `anyhvac-v0` for non-visualizer version
                 max_steps=86400, # max time in seconds
                 target_temperature=28, # target temperature in Celsius, highest reward at this position
                 upper_limit=80, # upper limit of temperature in Celsius, failure at this position
-                iter_per_step=600） # number of iterations per step, actual time elapsed=iter_per_step * 0.2
+                iter_per_step=600, 
+                set_lower_bound=16, # lower limit of ac set temperature
+                set_upper_bound=32, # upper limit of ac set temperature
+                tolerance=1, # temperature tolerance for reward calculation
+               ) # number of iterations per step, actual time elapsed=iter_per_step * 0.2
 
 
 ```
 
 ## Sampling an HVAC control task
-
 An HVAC task include random number of **sensors**, **coolers**, and **equipments** randomly aranged in the building. There might also be random walls in it. The task can be sampled by:
 
 ```python

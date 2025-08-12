@@ -10,17 +10,18 @@ class HVACEnvVisible(HVACEnv):
         self.empty_region = 20
 
     def reset(self, *args, **kwargs):
-        res = super().reset(*args, **kwargs)
+        res =super().reset(*args, **kwargs)
         self.render_init(render_size=640)
         self.keyboard_press = pygame.key.get_pressed()
         return res
 
     def step(self, actions):
-        actions = numpy.clip(actions, 0, 1)
         observation, reward, terminated, truncated, info = super().step(actions)
-        keydone, _ = self.render_update(info["heat_power"], actions, info["chtc_array"])
+
+        keydone, _ = self.render_update(info["heat_power"], info['cool_power'], info["chtc_array"])
         truncated = truncated or keydone
         return observation, reward, terminated, truncated, info
+
 
     def render_init(self, render_size=640):
         """
@@ -48,8 +49,7 @@ class HVACEnvVisible(HVACEnv):
         """
         if not hasattr(self, "_screen"):
             raise RuntimeError("Render is not initialized yet.")
-            
-
+        
         def colorbar(v, vmin=-10, vmax=100):
             return int(max(0, min(1.0, (v - vmin) / (vmax - vmin))) * 255)
         
@@ -81,7 +81,7 @@ class HVACEnvVisible(HVACEnv):
         # paint coolers
         for i, cooler in enumerate(self.coolers):
             pixels = ((cooler.loc / self.cell_size) * self._render_cell_size).astype(int)
-            r = radius_normalizer(actuators[i], vmin=0, vmax=1)
+            r = radius_normalizer(actuators[i], vmin=0, vmax=10000)
             xs = pixels[0] + self.render_origin_w
             ys = self.render_origin_h - pixels[1]
             pygame.draw.circle(self._screen, pygame.Color(0,255,0,255), (xs,ys),r, width=0)

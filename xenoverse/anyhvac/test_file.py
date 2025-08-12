@@ -1,8 +1,8 @@
 if __name__ == "__main__":
     import numpy
-    from xenoverse.anyhvacv2.anyhvac_env_vis import HVACEnvVisible, HVACEnv
-    from xenoverse.anyhvacv2.anyhvac_sampler import HVACTaskSampler
-    from xenoverse.anyhvacv2.anyhvac_solver import HVACSolverGTPID
+    from xenoverse.anyhvac.anyhvac_env_vis import HVACEnvVisible, HVACEnv
+    from xenoverse.anyhvac.anyhvac_sampler import HVACTaskSampler
+    from xenoverse.anyhvac.anyhvac_solver import HVACSolverGTPID
     import pickle 
 
     env = HVACEnv()
