@@ -10,11 +10,14 @@ Xenoverse is a collection of extremely diverse worlds by procedural generation b
 
 - [AnyMDP](xenoverse/anymdp): Procedurally generated unlimited general-purpose Markov Decision Processes (MDP) in discrete spaces.
 
-- [AnyMDPv2](xenoverse/anymdpv2): Procedurally generated unlimited general-purpose Markov Decision Processes (MDP) in continuous spaces.
+- [AnyHVAC](xenoverse/anyhvac): Procedurally generated random room and equipments for Heating, Ventilation, and Air Conditioning (HVAC) control
 
 - [MetaLanguage](xenoverse/metalang): Pseudo-language generated from randomized neural networks, benchmarking in-context language learning (ICLL).
 
 - [MazeWorld](xenoverse/mazeworld): Procedurally generated immersed 3D mazes with diverse maze structures.
+
+- [MazeControl](xenoverse/metcontrol): Randomized environments for classic control and locomotions.
+
 
 # Installation
 
