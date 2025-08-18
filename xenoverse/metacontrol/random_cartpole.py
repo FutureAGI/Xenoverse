@@ -7,22 +7,25 @@ import pygame
 from numpy import random
 from numba import njit
 from gymnasium import spaces
-from xenoverse.utils import pseudo_random_seed
+from xenoverse.utils import pseudo_random_seed, versatile_sample
 from gymnasium.envs.classic_control.cartpole import CartPoleEnv
 
-def sample_cartpole(gravity_scope=[9.8, 9.8],
-                    masscart_scope=[1.0, 1.0],
-                    masspole_scope=[0.1, 0.1],
-                    length_scope=[0.5, 0.5]):
+def sample_cartpole(gravity_scope=True,
+                    masscart_scope=True,
+                    masspole_scope=True,
+                    length_scope=True):
     # Sample a random cartpole task
     pseudo_random_seed(0)
-    def sample(scope):
-        return random.uniform(scope[0], scope[1])
+    gravity = versatile_sample(gravity_scope, (1, 11), 9.8)
+    masscart = versatile_sample(masscart_scope, (0.5, 2.0), 1.0)
+    masspole = versatile_sample(masspole_scope, (0.05, 0.20), 0.1)
+    length = versatile_sample(length_scope, (0.25, 1.0), 0.5)  # actually half the pole's length
+
     return {
-        "gravity": sample(gravity_scope),
-        "masscart": sample(masscart_scope),
-        "masspole": sample(masspole_scope),
-        "length": sample(length_scope)
+        "gravity": gravity,
+        "masscart": masscart,
+        "masspole": masspole,
+        "length": length
     }
 
 class RandomCartPoleEnv(CartPoleEnv):
@@ -34,10 +37,7 @@ class RandomCartPoleEnv(CartPoleEnv):
         super().__init__(*args, **kwargs)
 
     def set_task(self, task_config):
-        print("Setting task with config:", task_config)
-        self.gravity = task_config.get("gravity", 9.8)
-        self.masscart = task_config.get("masscart", 1.0)
-        self.masspole = task_config.get("masspole", 0.1)
-        self.length = task_config.get("length", 0.5)  # actually half the pole's length
-        self.polemass_length = self.masspole * task_config.get("length", 0.5)
+        for key, value in task_config.items():
+            setattr(self, key, value)
+        self.polemass_length = self.masspole * self.length
         self.total_mass = self.masspole + self.masscart

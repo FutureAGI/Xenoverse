@@ -3,9 +3,12 @@ AnyMDP Task Visualization
 """
 
 import numpy as np
+import numpy
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
+from copy import deepcopy
 from xenoverse.anymdp.solver import update_value_matrix
+from xenoverse.anymdp.anymdp_env import map_transition_reward
 
 
 def anymdp_task_visualizer(task, 
@@ -111,11 +114,66 @@ def anymdp_task_visualizer(task,
     if(show_gui):
         plt.show()
 
+def rearrange_states(task, K=5):
+    trans_ss = numpy.sum(task["transition"], axis=1)
+    ra_task = deepcopy(task)
+
+    s_map = []
+    for s in task["s_0"]:
+        s_map.append(s)
+
+    vm = numpy.zeros((task["ns"], task["na"]), dtype='float32')
+    vm = update_value_matrix(task["transition"], task["reward"], 0.99, vm)
+    vsm = numpy.max(vm, axis=-1)
+    print(task["s_e"])
+
+    while len(s_map) < task["ns"]:
+        s_trans_sum = []
+        for s in range(len(trans_ss)):
+            if(s in s_map):
+                continue
+            p2s = numpy.mean(trans_ss[s_map, [s for _ in range(len(s_map))]], axis=0)
+            if(p2s > 1.0e-6):
+                s_trans_sum.append((s, vsm[s], p2s))
+        s_sorted_trans = sorted(s_trans_sum, key=lambda x:x[2], reverse=True)
+        s_sorted_trans = sorted(s_sorted_trans[:K], key=lambda x:x[1], reverse=False)
+        s_map.append(s_sorted_trans[0][0])
+
+    # make the goal last
+    for s in task["s_e"]:
+        if(numpy.sum(task["reward"][:, :, s] > 0) and s_map.index(s) > task['ns'] // 2 and s_map.index(s) != task["ns"] - 1): # mv the goal to the end
+            s_map[-1], s_map[s_map.index(s)] = s_map[s_map.index(s)], s_map[-1]
+
+    s_map_inv = list(range(task["ns"]))
+    for i, s in enumerate(s_map):
+        s_map_inv[s] = i
+
+    ra_task["transition"] *= 0.0
+    ra_task["reward"] *= 0.0
+    ra_task["transition"], ra_task["reward"] = map_transition_reward(
+                        task["transition"], 
+                        task["reward"], 
+                        ra_task["transition"], 
+                        ra_task["reward"], 
+                        s_map_inv)
+    ra_task["state_mapping"] = s_map
+    
+    ra_task["s_0"] = []
+    ra_task["s_e"] = []
+    for s in task["s_0"]:
+        ra_task["s_0"].append(s_map_inv[s])
+    for s in task["s_e"]:
+        ra_task["s_e"].append(s_map_inv[s])
+
+    return ra_task
+
 if __name__ == '__main__':
-    from xenoverse.anymdp import AnyMDPTaskSampler
-    ns = 32
+    from xenoverse.anymdp import AnyMDPTaskSampler, GarnetTaskSampler
+    ns = 64
     na = 5
-    task = AnyMDPTaskSampler(ns, na, verbose=True)
+    #task = AnyMDPTaskSampler(ns, na, verbose=True)
+    task = GarnetTaskSampler(ns, na, b=2, verbose=True)
+    task = rearrange_states(task, K=5)
     anymdp_task_visualizer(task, need_ticks=False, 
                            need_lengends=False,
                            file_path=f'./vis_anymdp_ns{ns}na{na}')

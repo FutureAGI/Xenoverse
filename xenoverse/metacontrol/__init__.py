@@ -13,13 +13,19 @@
 # limitations under the License.
 
 from gymnasium.envs.registration import register
-from xenoverse.metacontrol.random_cartpole import RandomCartPoleEnv
-from xenoverse.metacontrol.random_cartpole import sample_cartpole
-
+from xenoverse.metacontrol.random_cartpole import sample_cartpole,RandomCartPoleEnv
+from xenoverse.metacontrol.random_acrobot import sample_acrobot, RandomAcrobotEnv
 
 register(
     id='random-cartpole-v0',
     entry_point='xenoverse.metacontrol.random_cartpole:RandomCartPoleEnv',
+    order_enforce=False,
+    disable_env_checker=True,
+    kwargs={}
+)
+register(
+    id='random-acrobot-v0',
+    entry_point='xenoverse.metacontrol.random_acrobot:RandomAcrobotEnv',
     order_enforce=False,
     disable_env_checker=True,
     kwargs={}

@@ -146,3 +146,33 @@ def check_valuefunction(task, verbose=False):
     if(verbose):
         print("Value Diff: {:.4f}, Gini Impurity: {:.4f}, Normalized Entropy: {:.4f}, final_goal_terminate: {}".format(vm_diffs, gini,ent, task["final_goal_terminate"]))
     return gini > 0.70 and ent > 0.35
+
+def get_stable_dist(task):
+    t_mat = numpy.copy(task["transition"])
+    r_mat = numpy.copy(task["reward"])
+    ns, na, _ = t_mat.shape
+    gamma = numpy.power(2, -1.0 / ns)
+    vm_opt = update_value_matrix(t_mat, r_mat, gamma,
+                                numpy.zeros((ns, na), dtype=float),
+                                is_greedy=True)
+    a_max = numpy.argmax(vm_opt, axis=1)
+    i_indices = np.arange(ns)[:, None]
+    j_indices = np.arange(ns)
+    opt_trans = numpy.copy(t_mat[i_indices, a_max[:, None], j_indices])
+    rnd_trans = numpy.mean(t_mat, axis=1)
+    s0 = task["s_0"]
+    s0_prob = task["s_0_prob"]
+    for s in task["s_e"]:
+        opt_trans[s, s0] = s0_prob # s_e directly lead to s0
+        rnd_trans[s, s0] = s0_prob # s_e directly lead to s0
+
+    for _ in range(20):
+        opt_trans = numpy.matmul(opt_trans, opt_trans)
+        rnd_trans = numpy.matmul(rnd_trans, rnd_trans)
+
+    s_0_dist = numpy.zeros((ns,))
+    s_0_dist[s0] = s0_prob
+    opt_prob = numpy.sort(numpy.matmul(numpy.transpose(opt_trans), s_0_dist))[::-1]
+    rnd_prob = numpy.sort(numpy.matmul(numpy.transpose(rnd_trans), s_0_dist))[::-1]
+
+    return opt_prob, rnd_prob

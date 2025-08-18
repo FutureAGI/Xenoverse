@@ -62,7 +62,7 @@ def sample_state_action_cost(ns, na, avg=0.05, low=0.0, high=0.10, sparsity=0.3)
     reward_noise = 0.30 * rnd_reward_base * numpy.clip(random.normal(size=(ns, na)), 0, None) * sparsity
     return reward[:, :, None], reward_noise[:, :, None]
 
-def sample_transition(ns, na, s0_range=3):
+def sample_transition(ns, na, s0_range=3, bm=None, bp=None):
     # sample S_0
     assert s0_range > 0
     if(s0_range < 2):
@@ -93,10 +93,14 @@ def sample_transition(ns, na, s0_range=3):
 
     # sample transition s-s'
     trans_ss = numpy.zeros((ns, ns), dtype=float)
-    min_leap = 2
-    max_leap = max(min_leap + 1, ns // 4 + 1) # max forward leap
-    min_back = 4
-    max_back = max(min_back + 1, ns // 2 + 1) # max backward leap
+    if(bp is None):
+        bp = ns // 4 + 1
+    if(bm is None):
+        bm = ns // 2 + 1
+    min_leap = 1
+    max_leap = max(min_leap + 1, bp) # max forward leap
+    min_back = 1
+    max_back = max(min_back + 1, bm) # max backward leap
 
     ss_from = numpy.zeros(ns, dtype=int)
     ss_to = numpy.zeros(ns, dtype=int)

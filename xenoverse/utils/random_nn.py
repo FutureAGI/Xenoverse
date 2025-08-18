@@ -3,6 +3,7 @@
 import time
 import numpy
 import re
+import random as sysrnd
 from numpy import random
 
 def pseudo_random_seed(hyperseed=0):
@@ -10,10 +11,9 @@ def pseudo_random_seed(hyperseed=0):
     Generate a pseudo random seed based on current time and system random number
     '''
     timestamp = time.time_ns()
-    system_random = int(random.random() * 100000000)
+    system_random = int(sysrnd.random() * 100000000)
     pseudo_random = timestamp + system_random + hyperseed
-    
-    return pseudo_random % (4294967296)
+    numpy.random.seed(pseudo_random % (4294967296))
     
 def gen_uniform_matrix(n_in, n_out):
     w = random.normal(size=[n_out, n_in])

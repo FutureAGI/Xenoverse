@@ -1,5 +1,6 @@
 import numpy
 from numba import njit
+from numpy import random
 
 @njit(cache=True)
 def conv2d_numpy(input_data:numpy.ndarray, 
@@ -39,3 +40,12 @@ def random_partition(num_parts:int):
     partitions.sort()
     partitions = numpy.concatenate(([0], partitions, [1]))
     return partitions[1:] - partitions[:-1]
+
+def versatile_sample(setting, default_range, default_value):
+    if(isinstance(setting, tuple) or isinstance(setting, list)):
+        assert len(setting) == 2, f"Setting must be a tuple or list of length 2, got {len(setting)}"
+        return random.uniform(setting[0], setting[1])
+    elif(setting):
+        return random.uniform(default_range[0], default_range[1])
+    else:
+        return default_value
