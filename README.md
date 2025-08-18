@@ -31,8 +31,8 @@ Related works
   journal={arXiv preprint arXiv:2405.17234},
   year={2024}
 }
-@article{wang2025omnirl,
-  title={OmniRL: In-Context Reinforcement Learning by Large-Scale Meta-Training in Randomized Worlds},
+@article{wang2025towards,
+  title={Towards Large-Scale In-Context Reinforcement Learning by Meta-Training in Randomized Worlds},
   author={Wang, Fan and Shao, Pengtao and Zhang, Yiming and Yu, Bo and Liu, Shaoshan and Ding, Ning and Cao, Yang and Kang, Yu and Wang, Haifeng},
   journal={arXiv preprint arXiv:2502.02869},
   year={2025}
