@@ -43,6 +43,8 @@ class RandomAcrobotEnv(CartPoleEnv):
         """
         Pay Attention max_steps might be reseted by task settings
         """
+        self.frameskip = kwargs.get("frameskip", 5)
+        kwargs.pop("frameskip", None)
         super().__init__(*args, **kwargs)
 
     # Rewrite the dynamics for acrobot
@@ -92,3 +94,14 @@ class RandomAcrobotEnv(CartPoleEnv):
         print("Setting task with config:", task_config)
         for key, value in task_config.items():
             setattr(self, key, value)
+
+    def step(self, action):
+        total_reward = 0
+        terminated = False
+        truncated = False
+        for _ in range(self.frameskip):
+            obs, reward, terminated, truncated, info = super().step(action)
+            total_reward += reward
+            if terminated or truncated:
+                break
+        return obs, total_reward, terminated, truncated, info

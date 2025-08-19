@@ -34,6 +34,8 @@ class RandomCartPoleEnv(CartPoleEnv):
         """
         Pay Attention max_steps might be reseted by task settings
         """
+        self.frameskip = kwargs.get("frameskip", 5)
+        kwargs.pop("frameskip", None)
         super().__init__(*args, **kwargs)
 
     def set_task(self, task_config):
@@ -41,3 +43,14 @@ class RandomCartPoleEnv(CartPoleEnv):
             setattr(self, key, value)
         self.polemass_length = self.masspole * self.length
         self.total_mass = self.masspole + self.masscart
+
+    def step(self, action):
+        total_reward = 0
+        terminated = False
+        truncated = False
+        for _ in range(self.frameskip):
+            obs, reward, terminated, truncated, info = super().step(action)
+            total_reward += reward
+            if terminated or truncated:
+                break
+        return obs, total_reward, terminated, truncated, info

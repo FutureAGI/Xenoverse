@@ -21,12 +21,12 @@ register(
     entry_point='xenoverse.metacontrol.random_cartpole:RandomCartPoleEnv',
     order_enforce=False,
     disable_env_checker=True,
-    kwargs={}
+    kwargs={"frameskip":1}
 )
 register(
     id='random-acrobot-v0',
     entry_point='xenoverse.metacontrol.random_acrobot:RandomAcrobotEnv',
     order_enforce=False,
     disable_env_checker=True,
-    kwargs={}
+    kwargs={"frameskip":1}
 )
