@@ -44,6 +44,8 @@ class RandomAcrobotEnv(CartPoleEnv):
         Pay Attention max_steps might be reseted by task settings
         """
         self.frameskip = kwargs.get("frameskip", 5)
+        self.reset_bounds_scale = kwargs.get("reset_bounds_scale", 0.10)
+        kwargs.pop("reset_bounds_scale", None)
         kwargs.pop("frameskip", None)
         super().__init__(*args, **kwargs)
 
@@ -105,3 +107,15 @@ class RandomAcrobotEnv(CartPoleEnv):
             if terminated or truncated:
                 break
         return obs, total_reward, terminated, truncated, info
+
+    def reset(self, *, seed: int | None = None, options: dict | None = None):
+        super().reset(seed=seed)
+        # Note that if you use custom reset bounds, it may lead to out-of-bound
+        # state/observations.
+        self.state = self.np_random.uniform(low=-1, high=1, size=(4,)).astype(
+            np.float32
+        ) * self.reset_bounds_scale
+
+        if self.render_mode == "human":
+            self.render()
+        return self._get_ob(), {}

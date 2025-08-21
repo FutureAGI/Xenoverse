@@ -35,7 +35,9 @@ class RandomCartPoleEnv(CartPoleEnv):
         Pay Attention max_steps might be reseted by task settings
         """
         self.frameskip = kwargs.get("frameskip", 5)
+        self.reset_bounds_scale = kwargs.get("reset_bounds_scale", numpy.array([0.45, 0.90, 0.13, 1.0]))
         kwargs.pop("frameskip", None)
+        kwargs.pop("reset_bounds_scale", None)
         super().__init__(*args, **kwargs)
 
     def set_task(self, task_config):
@@ -54,3 +56,18 @@ class RandomCartPoleEnv(CartPoleEnv):
             if terminated or truncated:
                 break
         return obs, total_reward, terminated, truncated, info
+
+
+    def reset(
+        self,
+        *,
+        seed: int | None = None,
+        options: dict | None = None):
+        # Note that if you use custom reset bounds, it may lead to out-of-bound
+        # state/observations.
+        self.state = self.np_random.uniform(low=-1, high=1, size=(4,)) * self.reset_bounds_scale
+        self.steps_beyond_terminated = None
+
+        if self.render_mode == "human":
+            self.render()
+        return np.array(self.state, dtype=np.float32), {}
