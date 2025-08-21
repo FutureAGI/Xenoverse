@@ -8,7 +8,9 @@ from numpy import random
 from numba import njit
 from gymnasium import spaces
 from xenoverse.utils import pseudo_random_seed, versatile_sample
-from gymnasium.envs.classic_control.cartpole import CartPoleEnv
+from gymnasium.envs.classic_control.acrobot import AcrobotEnv
+from numpy import cos, pi, sin
+
 
 def sample_acrobot(link_length_1=True,
                    link_length_2=True,
@@ -37,7 +39,7 @@ def sample_acrobot(link_length_1=True,
         "gravity": gravity
     }
 
-class RandomAcrobotEnv(CartPoleEnv):
+class RandomAcrobotEnv(AcrobotEnv):
 
     def __init__(self, *args, **kwargs):
         """
@@ -45,6 +47,9 @@ class RandomAcrobotEnv(CartPoleEnv):
         """
         self.frameskip = kwargs.get("frameskip", 5)
         self.reset_bounds_scale = kwargs.get("reset_bounds_scale", 0.10)
+        if(isinstance(self.reset_bounds_scale, list)):
+            assert len(self.reset_bounds_scale) == 4, "reset_bounds_scale should be a list of 4 elements"
+            self.reset_bounds_scale = numpy.array(self.reset_bounds_scale)
         kwargs.pop("reset_bounds_scale", None)
         kwargs.pop("frameskip", None)
         super().__init__(*args, **kwargs)
@@ -112,10 +117,10 @@ class RandomAcrobotEnv(CartPoleEnv):
         super().reset(seed=seed)
         # Note that if you use custom reset bounds, it may lead to out-of-bound
         # state/observations.
-        self.state = self.np_random.uniform(low=-1, high=1, size=(4,)).astype(
-            np.float32
+        self.state = random.uniform(low=-1, high=1, size=(4,)).astype(
+            numpy.float32
         ) * self.reset_bounds_scale
 
         if self.render_mode == "human":
-            self.render()
-        return self._get_ob(), {}
+            super().render()
+        return super()._get_ob(), {}
