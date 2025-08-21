@@ -32,10 +32,12 @@ def HVACTaskSampler(control_type='Temperature',
     n_coolers = max(int(area * rnd.uniform(0.05, 0.15)), 1)
 
     eps = rnd.uniform(0.0, 1.0)
-    if(eps < 0.33):
-        t_ambient = rnd.uniform(0, 40) # ambient temperature
-    elif(eps < 0.66):
-        t_ambient = rnd.uniform(15, 40)
+
+        
+    if(eps < 0.2):
+        t_ambient = rnd.uniform(-10, 20) # ambient temperature
+    elif(eps < 0.5):
+        t_ambient = rnd.uniform(20, 30)
     else:
         t_ambient = rnd.uniform(30, 40)
 
@@ -43,15 +45,16 @@ def HVACTaskSampler(control_type='Temperature',
     sensors = []
     equipments = []
     coolers = []
-
+    timer = []
     for i in range(n_sensors):
         sensors.append(BaseSensor(nw, nl, cell_size, cell_walls, min_dist=1.2,
                     avoidance=sensors))
     base_heater = HeaterUnc(nw, nl, cell_size, cell_walls, min_dist=1.2,
                     avoidance=equipments)
     for i in range(n_heaters):
-        equipments.append(HeaterUnc(nw, nl, cell_size, cell_walls, min_dist=1.2,
-                    avoidance=equipments, base_heater=base_heater))
+        heater = HeaterUnc(nw, nl, cell_size, cell_walls, min_dist=1.2, avoidance=equipments, base_heater=base_heater)
+        timer.append(heater.period)
+        equipments.append(heater)
         hc_array[equipments[-1].nloc[0], equipments[-1].nloc[1]] += rnd.uniform(20000, 80000)
     for i in range(n_coolers):
         coolers.append(Cooler(nw, nl, cell_size, cell_walls, min_dist=min(cell_size, 2.0),
@@ -79,9 +82,9 @@ def HVACTaskSampler(control_type='Temperature',
         'convection_coeffs': chtc_array,
         'heat_capacity': hc_array,
         'ambient_temp': t_ambient,
-        'sensors': sensors,
         'equipments': equipments,
         'coolers': coolers,
         'control_type': control_type,
         'target_temperature': target_temperature,
+        'heater_timer': timer,
     }

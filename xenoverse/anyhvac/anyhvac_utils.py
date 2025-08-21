@@ -159,23 +159,31 @@ class HeaterUnc(BaseVentilator):
         super().__init__(*args, **kwargs)
         if("base_heater" in kwargs):
             self.base_heater = kwargs["base_heater"]
-            self.base_factor = rnd.uniform(0.0, 0.8)
+            self.base_factor = rnd.uniform(0.2, 0.8)
         else:
             self.base_heater = None
         if("period_range" in kwargs):
-            period = rnd.randint(*kwargs["period_range"])
+            self.period = rnd.randint(*kwargs["period_range"])
+            self.period = self.period * 120
         else:
-            period = rnd.randint(86400, 604800)  # period of the heat source
+            self.period = rnd.randint(720, 5040)  # period of the heat source 
+            self.period = self.period * 120
         if("heat_variant_scale" in kwargs):
             self.heat_variant_scale = rnd.uniform(*kwargs["heat_variant_scale"])
         else:
-            self.heat_variant_scale = rnd.uniform(3200, 12000)
-        self.heat_periodical = RandomFourier(ndim=1, max_order=128, max_item=8, max_steps=period,
-                                             box_size=self.heat_variant_scale)
+            self.heat_variant_scale = rnd.uniform(0.1, 0.5)
+        
         if("heat_base_range" in kwargs):
             self.heat_base = rnd.uniform(*kwargs["heat_base_range"])
         else:
-            self.heat_base = rnd.uniform(200.0, 1600.0)
+
+            self.heat_base = rnd.uniform(2000.0, 4000.0)
+        
+        
+
+        self.heat_periodical = RandomFourier(ndim=1, max_order=64, max_item=8, max_steps=self.period, box_size=rnd.uniform(3200, 6800))
+
+        self.heat_base = rnd.uniform(2000.0, 4000.0)
 
     def power_heat(self, t):
         # 根据t随机生成一个发热量
