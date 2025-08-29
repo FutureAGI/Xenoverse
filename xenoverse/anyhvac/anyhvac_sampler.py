@@ -29,17 +29,17 @@ def HVACTaskSampler(control_type='Temperature',
 
     n_sensors = max(int(area * rnd.uniform(0.10, 0.30)), 1)
     n_heaters = max(int(area * rnd.uniform(0.10, 0.30)), 1)
-    n_coolers = max(int(area * rnd.uniform(0.05, 0.15)), 1)
+    n_coolers = max(int(area * rnd.uniform(0.10, 0.15)), 1)
 
     eps = rnd.uniform(0.0, 1.0)
 
         
-    if(eps < 0.2):
-        t_ambient = rnd.uniform(-10, 20) # ambient temperature
-    elif(eps < 0.5):
-        t_ambient = rnd.uniform(20, 30)
+    if(eps < 0.0):
+        t_ambient = rnd.uniform(-10, 28) # ambient temperature
+    elif(eps < 0.9):
+        t_ambient = rnd.uniform(28, 35)
     else:
-        t_ambient = rnd.uniform(30, 40)
+        t_ambient = rnd.uniform(35, 40)
 
     print(f"Sample Ambient Temperature: {t_ambient}")
     sensors = []

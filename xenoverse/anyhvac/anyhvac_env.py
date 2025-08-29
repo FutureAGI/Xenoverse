@@ -8,9 +8,9 @@ from copy import deepcopy
 
 class HVACEnv(gym.Env):
     def __init__(self,
-                 max_steps=5040,  # 7 days
+                 max_steps=5040,  # sec_per_iter * iter_per_step * max_steps / 86400 days
                  failure_upperbound=40, # triggers failure above this temperature
-                 iter_per_step=600,# 600
+                 iter_per_step=150,# 600
                 #  iter_per_step=6000,
                  sec_per_iter=0.2,
                  set_lower_bound=16,
@@ -18,7 +18,8 @@ class HVACEnv(gym.Env):
                  verbose=False,
                  action_space_format='box',
                  include_time_in_observation=False,
-                 include_heat_in_observation=True,
+                 include_heat_in_observation=False,
+                 include_switch=True,
                  ):
         self.observation_space = gym.spaces.Box(low=-273, high=273, shape=(1,), dtype=numpy.float32)
 
@@ -28,9 +29,9 @@ class HVACEnv(gym.Env):
         self.max_steps = max_steps
         self.failure_upperbound = failure_upperbound
         self.failure_reward = -100
-        self.energy_reward_wht = -3.0   
-        self.switch_reward_wht = -0.1  
-        self.target_reward_wht = -0.25  # ranging from 0.0 to -2.00
+        self.energy_reward_wht = -10.0 #-3.0   
+        self.switch_reward_wht = -1.0 
+        self.target_reward_wht = -0.5  
         self.base_reward = 1.0 # survive bonus
         self.iter_per_step = iter_per_step
         self.sec_per_iter = sec_per_iter
@@ -42,7 +43,10 @@ class HVACEnv(gym.Env):
         self.action_space_format = action_space_format
         self.include_time_in_observation = include_time_in_observation 
         self.include_heat_in_observation = include_heat_in_observation
-        
+        self.include_switch = include_switch
+        self.return_normilized_obs = False
+        self.random_start_t = False
+
     def set_task(self, task):
         for key in task:
             self.__dict__[key] = task[key]
@@ -99,11 +103,15 @@ class HVACEnv(gym.Env):
             low_bounds[n_sensors:] = 0.0
             high_bounds[n_sensors:] = 80000.0 
             self.observation_space = gym.spaces.Box(low=low_bounds, high=high_bounds, shape=(obs_shape_dim,), dtype=numpy.float32)
-            
-
+        elif self.include_switch:
+            obs_shape_dim = n_sensors + n_coolers
+            if self.return_normilized_obs:     
+                self.observation_space = gym.spaces.Box(low=-1, high=1, shape=(obs_shape_dim,), dtype=numpy.float32)
+            else:
+                self.observation_space = gym.spaces.Box(low=-1, high=50, shape=(obs_shape_dim,), dtype=numpy.float32)
         else:
-            # observation space and action space
-            self.observation_space = gym.spaces.Box(low=-273, high=273, shape=(n_sensors,), dtype=numpy.float32)
+            # observation space
+            self.observation_space = gym.spaces.Box(low=10, high=50, shape=(n_sensors,), dtype=numpy.float32)
 
     def _get_obs(self):
 
@@ -126,7 +134,8 @@ class HVACEnv(gym.Env):
 
             for i, equipment in enumerate(self.equipments):
                 
-                eff = equipment(self.sliding_t[i] + self.t)  # 发热功率每次reset滑窗
+                # eff = equipment(self.sliding_t[i] + self.t)  # 发热功率每次reset滑窗
+                eff = equipment(self.t)  
 
                 static_heat += eff["delta_energy"]
                 static_chtc_array += eff["delta_chtc"]
@@ -138,8 +147,30 @@ class HVACEnv(gym.Env):
             heat_readings = np.array(heater_progress, dtype=np.float32)
             return np.concatenate((sensor_readings, heat_readings))
 
+        elif self.include_switch:
+            switch_sign = numpy.where(self.last_action["switch"] < 0.5, -1, 1)
+            last_switch_time = (self.t - self.cooler_last_switch_time) * switch_sign
+            last_switch_time = numpy.clip(last_switch_time, - 28800 * 2, 28800 * 2)
+            last_switch_time = last_switch_time 
+            last_switch_time = last_switch_time / 28800 * 2 # [-1,1]
+            last_switch_time = np.array(last_switch_time, dtype=np.float32)
+
+            return  np.concatenate((sensor_readings, last_switch_time))
         else:
             return sensor_readings
+    
+    def _normalize_obs(self, obs):
+        if self.include_switch:
+            n_sensor = len(self.sensors)
+            obs[:n_sensor] = numpy.clip(obs[:n_sensor], 10, 50)
+            obs[:n_sensor] = (obs[:n_sensor] - 30.0) / 20.0 # [-1,1]
+            return obs
+        return obs
+    
+    def set_return_normilized_obs(self, return_normilized_obs):
+        self.return_normilized_obs = return_normilized_obs
+
+
     def _get_state(self):
         return numpy.copy(self.state)
 
@@ -148,21 +179,41 @@ class HVACEnv(gym.Env):
                 "time": self.t, 
                 "topology_cooler": numpy.copy(self.cooler_topology), "topology_cooler_sensor":numpy.copy(self.cooler_sensor_topology)}
 
+    def set_random_start_t(self, random_start_t):
+        self.random_start_t = random_start_t
+
     def reset(self, *args, **kwargs):
         self.state = numpy.full((self.n_width, self.n_length), self.ambient_temp)
         # Add some initial noise
         self.state = self.state + numpy.random.normal(0, 2.0, (self.n_width, self.n_length)) 
-        self.t = 0.0
+        if self.random_start_t:
+            self.t = numpy.random.uniform(0,self.max_steps * self.iter_per_step * self.sec_per_iter)
+        else:
+            self.t = 0.0
         self.sliding_t = 120 * np.random.randint(0, 2520, size=len(self.equipments), dtype=np.int32) # 发热功率每次reset滑窗  # 2520
 
         self.last_action = {"switch": numpy.array([0]), "value": numpy.array([0.0])}
+        self.current_action = {"switch": numpy.array([0]), "value": numpy.array([0.0])}
 
         self.episode_step = 0
         self.warning_count = 0
 
+        self.n_coolers = len(self.coolers)
+        self.cooler_last_switch_time = np.zeros(self.n_coolers)
+        self.cooler_last_state = np.zeros(self.n_coolers)
+
         observation = self._get_obs()
 
         return observation, self._get_info()
+    
+    def set_control_type(self, control_type):
+        if(control_type.lower() == 'temperature' or control_type.lower() == 'power'):
+            self.control_type = control_type
+            for i, cooler in enumerate(self.coolers):
+                cooler.set_control_type(control_type)
+            print("control type set to: ", control_type)
+        else:
+            raise Exception(f"Unknown control type: {self.control_type}")
     
     def action_transfer(self, action):
         if(self.control_type.lower() == 'temperature'):
@@ -183,7 +234,8 @@ class HVACEnv(gym.Env):
         cell_area = self.cell_size * self.cell_size
         for i, equipment in enumerate(self.equipments):
 
-            eff = equipment(self.sliding_t[i] + self.t) # 发热功率每次reset滑窗
+            # eff = equipment(self.sliding_t[i] + self.t) # 发热功率每次reset滑窗
+            eff = equipment(self.t) # 发热功率每次reset滑窗
             static_heat += eff["delta_energy"]
             static_chtc_array += eff["delta_chtc"]
             equip_heat.append(eff["heat"])
@@ -229,7 +281,9 @@ class HVACEnv(gym.Env):
         elif self.include_heat_in_observation:
             num_sensors = len(self.sensors)
             obs_arr = numpy.array(observation[:num_sensors]) # Get only sensor readings
-            
+        elif self.include_switch:
+            num_sensors = len(self.sensors)
+            obs_arr = numpy.array(observation[:num_sensors]) # Get only sensor readings 
         else:
             obs_arr = numpy.array(observation)
         
@@ -244,22 +298,42 @@ class HVACEnv(gym.Env):
         # cal loss with max temperature deviation in each area
         # add severe punishment to overheat
         target_cost = self.target_reward_wht * numpy.mean(target_loss)
-        switch_cost = self.switch_reward_wht * numpy.mean(numpy.abs(
-                action["switch"] - self.last_action["switch"]))
+        # switch_cost = self.switch_reward_wht * numpy.mean(numpy.abs(
+        #         action["switch"] - self.last_action["switch"]))
+
+        switch_cost = 0.0
+        for i in range(len(action["switch"])):
+            duration_time = self.t - self.cooler_last_switch_time[i]
+            if abs(action["switch"][i] - self.cooler_last_state[i]) > 0:
+                if duration_time < 1800 and self.cooler_last_switch_time[i] > 0:
+                    deficit_time = 1800 - duration_time
+                    switch_cost += 0.0002 * deficit_time
+                self.cooler_last_switch_time[i] = self.t
+                self.cooler_last_state[i] = action["switch"][i]
+            # elif duration_time > 28800 and self.cooler_last_state[i] > 0:
+            #     excess_time = duration_time - 28800
+            #     switch_cost += 0.0001 * excess_time
+        switch_cost = (self.switch_reward_wht * switch_cost) / self.n_coolers    
+
 
         # reward is connected to the AVERAGE POWER of each cooler
         energy_cost = self.energy_reward_wht * (power / 10000)
         hard_loss = (obs_arr > self.failure_upperbound).any()
-
+        overheat = 0
+        over_tolerace = 0
         if(hard_loss):
             self.warning_count += 1
+            overheat = 1
         else:
             self.warning_count -= 1
             self.warning_count = max(self.warning_count, 0)
 
-        info = {"fail_step_percrentage": hard_loss, "energy_cost": energy_cost, "target_cost": target_cost, "switch_cost": switch_cost}
+        info = {"over_heat": overheat,
+                "over_tolerace": over_tolerace, 
+                "energy_cost": energy_cost, "target_cost": target_cost, "switch_cost": switch_cost}
 
         if(self.warning_count > self.warning_count_tolerance):
+            info["over_tolerace"] = 1
             return self.failure_reward, True, info
         
         return (self.base_reward + target_cost + switch_cost + energy_cost,  
@@ -311,6 +385,7 @@ class HVACEnv(gym.Env):
 
         self.episode_step += 1
         equip_heat, chtc_array, powers = self.update_states(action, dt=self.sec_per_iter, n=self.iter_per_step)
+        self.current_action = deepcopy(action)
         observation = self._get_obs()
 
         # calculate average power of each cooler
@@ -320,6 +395,11 @@ class HVACEnv(gym.Env):
         truncated = self.episode_step >= self.max_steps
         self.last_action = deepcopy(action)
 
+        if self.return_normilized_obs:
+            normalized_obs = self._normalize_obs(observation)
+        else:
+            normalized_obs = observation
+        
         info.update(self._get_info())
         info.update({
                 "last_control": deepcopy(self.last_action),
@@ -331,27 +411,32 @@ class HVACEnv(gym.Env):
         if self.verbose:
             # print("self.verbose", self.verbose)
 
-            cool_power = round(np.mean(info.get("cool_power", 0)),4)
-            heat_power = round(np.mean(info.get("heat_power", 0)),4)
-            fail_step_percrentage = info["fail_step_percrentage"] if isinstance(info["fail_step_percrentage"], numbers.Real) else 0
+            cool_power = round(np.sum(info.get("cool_power", 0)),4)
+            heat_power = round(np.sum(info.get("heat_power", 0)),4)
+            over_tolerace = info["over_tolerace"] if isinstance(info["over_tolerace"], numbers.Real) else 0
             info_total = f"energy_cost: {round(info.get('energy_cost', 0),4)}, target_cost: {round(info.get('target_cost', 0),4)}, switch_cost: {round(info.get('switch_cost', 0),4)},cool_power: {cool_power}, heat_power: {heat_power}"
-            print(f"Step {self.episode_step} | fail_step_percrentage:{fail_step_percrentage} | Reward: {reward} | {info_total}| cool_power: {cool_power:.2f} | heat_power:{heat_power:.2f} ", flush=True)
-            
-            # print(f"step:{self.episode_step}, Reward:{reward}, terminated:{terminated},\nmax-temperature:{numpy.max(observation)}, avg-temperature:{numpy.mean(observation)}, avg-power:{average_power:.5f}, ambient_temperature:{self.ambient_temp}, cool_power:{cool_power}, heat_power:{heat_power}\n")
+            print(f"Step {self.episode_step} | over_tolerace:{over_tolerace} | Reward: {reward} | {info_total} ", flush=True)
                 
-        return observation, reward, terminated, truncated, info
+        return normalized_obs, reward, terminated, truncated, info
 
     def sample_action(self, mode="random"):
         if mode == "random":
             return self._random_action()
         elif mode == "pid":
             return self._pid_action()
+        elif mode == "max":
+            n_coolers = len(self.coolers)
+            sampled_action = np.concatenate((
+                np.ones(n_coolers, dtype=np.float32),  
+                np.ones(n_coolers, dtype=np.float32)  
+            ))
+            return sampled_action
         else:
             raise ValueError(f"Unsupported mode: {mode}")
 
     def _random_action(self):
         if isinstance(self.action_space, Dict):
-        return self.action_space.sample()
+            return self.action_space.sample()
 
     def _pid_action(self, pid_params=None):
 
@@ -378,8 +463,7 @@ class HVACEnv(gym.Env):
             a = np.clip(a, 0.0, 1.0) # Clip to valid 0-1 range
 
         elif self.control_type.lower() == 'power':
-
-             a = 0.5 # Placeholder for power control PID
+            a = 0.5 # Placeholder for power control PID
         else:
             a = 0.0 # Default if control type unknown
         action[n_coolers:] = a

@@ -98,7 +98,7 @@ class BaseVentilator(BaseNodes):
 
         self.wall_offset = numpy.array([[-0.5, 0], [0, -0.5]])  # 墙相对位置
 
-        self.power_eff_vent = rnd.uniform(0.5, 1.0)  # 功率效率
+        self.power_eff_vent = rnd.uniform(50.0, 100.0)  # 功率效率
         self.cooler_eer_base = rnd.uniform(2.0, 5.0)  # cooler effect
         self.cooler_eer_decay_start = rnd.uniform(8.0, 15.0)  # 制冷效率衰减起点
         self.cooler_eer_zero_point = rnd.uniform(16, 24)  # 制冷效率为0的点
@@ -159,15 +159,18 @@ class HeaterUnc(BaseVentilator):
         super().__init__(*args, **kwargs)
         if("base_heater" in kwargs):
             self.base_heater = kwargs["base_heater"]
-            self.base_factor = rnd.uniform(0.2, 0.8)
+            self.base_factor = rnd.uniform(0.4, 0.8)
         else:
             self.base_heater = None
         if("period_range" in kwargs):
             self.period = rnd.randint(*kwargs["period_range"])
-            self.period = self.period * 120
+            self.period = self.period * 900
+        if(self.base_heater == None):
+            self.period = rnd.randint(1440, 2880)  # period of the heat source 
+            self.period = self.period * 150
         else:
             self.period = rnd.randint(720, 5040)  # period of the heat source 
-            self.period = self.period * 120
+            self.period = self.period * 900
         if("heat_variant_scale" in kwargs):
             self.heat_variant_scale = rnd.uniform(*kwargs["heat_variant_scale"])
         else:
@@ -183,11 +186,11 @@ class HeaterUnc(BaseVentilator):
 
         self.heat_periodical = RandomFourier(ndim=1, max_order=64, max_item=8, max_steps=self.period, box_size=rnd.uniform(3200, 6800))
 
-        self.heat_base = rnd.uniform(2000.0, 4000.0)
+        self.heat_base = rnd.uniform(1000.0, 2000.0)
 
     def power_heat(self, t):
         # 根据t随机生成一个发热量
-        return numpy.clip(self.heat_base + numpy.clip(self.heat_periodical(t)[0], 0, None), None, 20000)
+        return numpy.clip(self.heat_base + numpy.clip(self.heat_periodical(t)[0], 0, None), None, 8000)
 
     def __call__(self, t):
         res = super().step(0, 0, t)
@@ -211,13 +214,13 @@ class Cooler(BaseVentilator):
         self.temp_diff_decay_lb = rnd.uniform(-2.0, -0.01)
 
         self.max_cooling_power = 10000
-        self.power_vent_min = rnd.uniform(500, 1000)
+        self.power_vent_min = rnd.uniform(50, 100)
         self.min_cooling_power = self.power_vent_min
         if (rnd.random() < 0.5):
-            self.power_vent_ratio = rnd.uniform(0.05, 0.15)  # fixed ventilator ratio
+            self.power_vent_ratio = rnd.uniform(0.005, 0.01)  # fixed ventilator ratio
         else:
             self.power_vent_ratio = 0.0
-            self.power_vent_min = rnd.uniform(500, 1500)  # fixed ventilator power
+            self.power_vent_min = rnd.uniform(50, 100)  # fixed ventilator power
 
         # drift of return sensors
         period = rnd.randint(100000, 300000000)
