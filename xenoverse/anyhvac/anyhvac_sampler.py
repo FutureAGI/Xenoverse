@@ -64,10 +64,7 @@ def HVACTaskSampler(control_type='Temperature',
     if(target_temperature is not None):
         target_temperature = target_temperature
     else:
-        if(rnd.choice([True, False])):
-            target_temperature = rnd.uniform(24, 28)
-        else:
-            target_temperature = rnd.uniform(24, 28, size=(n_sensors))
+        target_temperature = round(rnd.uniform(24, 28) * 10) / 10
 
     return {
         'width': dw,

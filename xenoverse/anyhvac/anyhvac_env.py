@@ -8,24 +8,20 @@ from copy import deepcopy
 
 class HVACEnv(gym.Env):
     def __init__(self,
-                 max_steps=5040,  # sec_per_iter * iter_per_step * max_steps / 86400 days
+                 max_steps=20160,  # sec_per_iter * iter_per_step * max_steps / 86400 days
                  failure_upperbound=40, # triggers failure above this temperature
-                 iter_per_step=150,# 600
-                #  iter_per_step=6000,
+                 iter_per_step=150,
                  sec_per_iter=0.2,
                  set_lower_bound=16,
                  set_upper_bound=32,
                  verbose=False,
                  action_space_format='box',
-                 include_time_in_observation=False,
                  include_heat_in_observation=False,
                  include_switch=True,
+                 include_last_action=True
                  ):
         self.observation_space = gym.spaces.Box(low=-273, high=273, shape=(1,), dtype=numpy.float32)
-
         self.action_space = None
-        # print("24 self.action_space",self.action_space.shape)
- 
         self.max_steps = max_steps
         self.failure_upperbound = failure_upperbound
         self.failure_reward = -100
@@ -41,9 +37,9 @@ class HVACEnv(gym.Env):
         self.verbose = verbose
         self.warning_count_tolerance = 5
         self.action_space_format = action_space_format
-        self.include_time_in_observation = include_time_in_observation 
         self.include_heat_in_observation = include_heat_in_observation
         self.include_switch = include_switch
+        self.include_last_action = include_last_action
         self.return_normilized_obs = False
         self.random_start_t = False
 
@@ -52,21 +48,18 @@ class HVACEnv(gym.Env):
             self.__dict__[key] = task[key]
         self.task_set = True
         self.heat_capacity = task.get('heat_capacity', []) 
-        # print("task", task)
         self.equipments = task.get('equipments', []) 
-        # 验证设备类型
         
         n_coolers = len(self.coolers)
         n_sensors = len(self.sensors)
         n_heaters = len(self.equipments)
-        # 根据格式创建动作空间
         
         if self.action_space_format == 'dict':
             self.action_space = Dict({
                 "switch": gym.spaces.MultiBinary(n_coolers),
                 "value": gym.spaces.Box(low=0, high=1, shape=(n_coolers,), dtype=np.float32)
             })
-        else:  # 默认使用Box格式
+        else: 
             self.action_space = gym.spaces.Box(low=0, high=1, shape=(2*n_coolers,), dtype=numpy.float32) # Placeholder shape
 
         self.cooler_topology = numpy.zeros((n_coolers, n_coolers))
@@ -85,17 +78,7 @@ class HVACEnv(gym.Env):
         # calculate cross sectional area
         self.csa = self.cell_size * self.floor_height
 
-        if self.include_time_in_observation:
-            obs_shape_dim = n_sensors
-            obs_shape_dim += 1 # Add one dimension for normalized time (episode progress)
-            low_bounds = np.full(obs_shape_dim, -273.0, dtype=np.float32)
-            high_bounds = np.full(obs_shape_dim, 273.0, dtype=np.float32)
-            # Last element is normalized episode progress [0, 1]
-            low_bounds[n_sensors] = 0.0
-            high_bounds[n_sensors] = 100.0
-            
-            self.observation_space = gym.spaces.Box(low=low_bounds, high=high_bounds, shape=(obs_shape_dim,), dtype=numpy.float32)
-        elif self.include_heat_in_observation:
+        if self.include_heat_in_observation:
             obs_shape_dim = n_sensors
             obs_shape_dim += n_heaters
             low_bounds = np.full(obs_shape_dim, -273.0, dtype=np.float32)
@@ -103,12 +86,15 @@ class HVACEnv(gym.Env):
             low_bounds[n_sensors:] = 0.0
             high_bounds[n_sensors:] = 80000.0 
             self.observation_space = gym.spaces.Box(low=low_bounds, high=high_bounds, shape=(obs_shape_dim,), dtype=numpy.float32)
-        elif self.include_switch:
+        elif self.include_switch and not self.include_last_action:
             obs_shape_dim = n_sensors + n_coolers
             if self.return_normilized_obs:     
                 self.observation_space = gym.spaces.Box(low=-1, high=1, shape=(obs_shape_dim,), dtype=numpy.float32)
             else:
                 self.observation_space = gym.spaces.Box(low=-1, high=50, shape=(obs_shape_dim,), dtype=numpy.float32)
+        elif self.include_switch and self.include_last_action:
+            obs_shape_dim = n_sensors + 2 * n_coolers
+            self.observation_space = gym.spaces.Box(low=-1, high=50, shape=(obs_shape_dim,), dtype=numpy.float32)
         else:
             # observation space
             self.observation_space = gym.spaces.Box(low=10, high=50, shape=(n_sensors,), dtype=numpy.float32)
@@ -118,15 +104,7 @@ class HVACEnv(gym.Env):
         heater_progress = []
         sensor_readings = np.array([sensor(self.state, self.t) for sensor in self.sensors], dtype=np.float32)
 
-        if self.include_time_in_observation:
-
-            normalized_episode_progress = float(self.episode_step*100) / 5040
-            timer_readings = np.clip(normalized_episode_progress, 0.0, 100.0)
-            timer_readings = [np.float32(normalized_episode_progress)]
-
-            return np.concatenate((sensor_readings, timer_readings))
-
-        elif self.include_heat_in_observation:
+        if self.include_heat_in_observation:
 
             static_chtc_array = numpy.copy(self.convection_coeffs)
             static_heat = numpy.zeros((self.n_width, self.n_length))
@@ -134,7 +112,6 @@ class HVACEnv(gym.Env):
 
             for i, equipment in enumerate(self.equipments):
                 
-                # eff = equipment(self.sliding_t[i] + self.t)  # 发热功率每次reset滑窗
                 eff = equipment(self.t)  
 
                 static_heat += eff["delta_energy"]
@@ -147,15 +124,29 @@ class HVACEnv(gym.Env):
             heat_readings = np.array(heater_progress, dtype=np.float32)
             return np.concatenate((sensor_readings, heat_readings))
 
-        elif self.include_switch:
+        elif self.include_switch and not self.include_last_action:
             switch_sign = numpy.where(self.last_action["switch"] < 0.5, -1, 1)
-            last_switch_time = (self.t - self.cooler_last_switch_time) * switch_sign
-            last_switch_time = numpy.clip(last_switch_time, - 28800 * 2, 28800 * 2)
-            last_switch_time = last_switch_time 
-            last_switch_time = last_switch_time / 28800 * 2 # [-1,1]
-            last_switch_time = np.array(last_switch_time, dtype=np.float32)
+            last_switch_time = (self.t - self.cooler_last_switch_time)
+            switch_obs =  numpy.zeros(last_switch_time.shape, dtype=numpy.float32)
+            switch_obs[last_switch_time < 1800] = 1.0
+            condition = (switch_sign == 1) & (last_switch_time > 172800)
+            switch_obs[condition] = 2.0
+            return  np.concatenate((sensor_readings, switch_obs))
+        
+        elif self.include_switch and self.include_last_action:
+            switch_sign = numpy.where(self.last_action["switch"] < 0.5, -1, 1)
+            action_temp = self.last_action["value"] * (self.upper_bound - self.lower_bound) + self.lower_bound
+            off_coolers_mask = switch_sign == 1
+            action_temp[off_coolers_mask] = -1.0
 
-            return  np.concatenate((sensor_readings, last_switch_time))
+            last_switch_time = (self.t - self.cooler_last_switch_time)
+            switch_obs =  numpy.zeros(last_switch_time.shape, dtype=numpy.float32)
+            switch_obs[last_switch_time < 1800] = 1.0
+            condition = (switch_sign == 1) & (last_switch_time > 172800)
+            switch_obs[condition] = 2.0
+
+            return  np.concatenate((sensor_readings, action_temp, switch_obs))
+
         else:
             return sensor_readings
     
@@ -192,15 +183,26 @@ class HVACEnv(gym.Env):
             self.t = 0.0
         self.sliding_t = 120 * np.random.randint(0, 2520, size=len(self.equipments), dtype=np.int32) # 发热功率每次reset滑窗  # 2520
 
-        self.last_action = {"switch": numpy.array([0]), "value": numpy.array([0.0])}
-        self.current_action = {"switch": numpy.array([0]), "value": numpy.array([0.0])}
-
         self.episode_step = 0
         self.warning_count = 0
 
         self.n_coolers = len(self.coolers)
         self.cooler_last_switch_time = np.zeros(self.n_coolers)
         self.cooler_last_state = np.zeros(self.n_coolers)
+
+        if self.control_type.lower() == 'temperature':
+            self.default_action_value = (self.target_temperature - self.lower_bound) / (self.upper_bound - self.lower_bound)
+            self.last_action = {
+                "switch": numpy.zeros(self.n_coolers, dtype=numpy.int8),
+                "value": numpy.full(self.n_coolers, self.default_action_value, dtype=numpy.float32)
+            }
+            self.current_action = {
+                "switch": numpy.zeros(self.n_coolers, dtype=numpy.int8),
+                "value": numpy.full(self.n_coolers, self.default_action_value, dtype=numpy.float32)
+            }
+        elif self.control_type.lower() == 'power':
+            self.last_action = {"switch": numpy.array([0]), "value": numpy.array([0.0])}
+            self.current_action = {"switch": numpy.array([0]), "value": numpy.array([0.0])}
 
         observation = self._get_obs()
 
@@ -234,8 +236,7 @@ class HVACEnv(gym.Env):
         cell_area = self.cell_size * self.cell_size
         for i, equipment in enumerate(self.equipments):
 
-            # eff = equipment(self.sliding_t[i] + self.t) # 发热功率每次reset滑窗
-            eff = equipment(self.t) # 发热功率每次reset滑窗
+            eff = equipment(self.t)
             static_heat += eff["delta_energy"]
             static_chtc_array += eff["delta_chtc"]
             equip_heat.append(eff["heat"])
@@ -275,15 +276,15 @@ class HVACEnv(gym.Env):
         return equip_heat, net_chtc, avg_power
     
     def reward(self, observation, action, power):
-        if self.include_time_in_observation:
-            num_sensors = len(self.sensors)
-            obs_arr = numpy.array(observation[:num_sensors]) # Get only sensor readings
-        elif self.include_heat_in_observation:
+        if self.include_heat_in_observation:
             num_sensors = len(self.sensors)
             obs_arr = numpy.array(observation[:num_sensors]) # Get only sensor readings
         elif self.include_switch:
             num_sensors = len(self.sensors)
-            obs_arr = numpy.array(observation[:num_sensors]) # Get only sensor readings 
+            obs_arr = numpy.array(observation[:num_sensors]) # Get only sensor readings
+        elif self.include_last_action:
+            num_sensors = len(self.sensors)
+            obs_arr = numpy.array(observation[:num_sensors]) # Get only sensor readings
         else:
             obs_arr = numpy.array(observation)
         
@@ -310,9 +311,9 @@ class HVACEnv(gym.Env):
                     switch_cost += 0.0002 * deficit_time
                 self.cooler_last_switch_time[i] = self.t
                 self.cooler_last_state[i] = action["switch"][i]
-            # elif duration_time > 28800 and self.cooler_last_state[i] > 0:
-            #     excess_time = duration_time - 28800
-            #     switch_cost += 0.0001 * excess_time
+            elif duration_time > 172800 and self.cooler_last_state[i] > 0:
+                excess_time = duration_time - 172800
+                switch_cost += 0.0001 * excess_time
         switch_cost = (self.switch_reward_wht * switch_cost) / self.n_coolers    
 
 
@@ -374,6 +375,13 @@ class HVACEnv(gym.Env):
         }
         return action_dict
 
+    def _set_default_action_value(self, action):
+        switch_binary = action["switch"]
+        value = action["value"].copy()
+        off_indices = switch_binary < 0.5
+        value[off_indices] = self.default_action_value
+        action["value"] = value
+        return action
 
     def step(self, action):
 
@@ -382,6 +390,9 @@ class HVACEnv(gym.Env):
             action = action
         else:
             action = self._unflatten_action(action)
+
+        if(self.control_type.lower() == 'temperature'):
+            action = self._set_default_action_value(action)
 
         self.episode_step += 1
         equip_heat, chtc_array, powers = self.update_states(action, dt=self.sec_per_iter, n=self.iter_per_step)
@@ -469,3 +480,86 @@ class HVACEnv(gym.Env):
         action[n_coolers:] = a
 
         return action
+
+
+class HVACEnvDiscreteAction(HVACEnv):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.action_resulotion_temp = 0.1
+        
+    def _discretize_action(self, action):
+        """Discretize the action value to make it a multiple of the resolution."""
+        if isinstance(self.action_space, gym.spaces.Dict):
+            discretized_action = deepcopy(action)
+            if 'value' in discretized_action:
+                temp_value = action['value'] * (self.upper_bound - self.lower_bound) + self.lower_bound
+                discretized_temp = np.round(temp_value / self.action_resulotion_temp).astype(int) * self.action_resulotion_temp
+                discretized_action['value'] = np.clip(
+                    (discretized_temp - self.lower_bound) / (self.upper_bound - self.lower_bound),
+                    0.0, 1.0
+                )
+            return discretized_action
+        else:
+            n_coolers = len(self.coolers)
+            switch_part = action[:n_coolers]
+            value_part = action[n_coolers:]
+            
+            temp_value = value_part * (self.upper_bound - self.lower_bound) + self.lower_bound
+            discretized_temp = np.round(temp_value / self.action_resulotion_temp).astype(int) * self.action_resulotion_temp
+            discretized_value = np.clip(
+                (discretized_temp - self.lower_bound) / (self.upper_bound - self.lower_bound),
+                0.0, 1.0
+            )
+            return np.concatenate([switch_part, discretized_value])
+    
+    def step(self, action):
+        discretized_action = self._discretize_action(action)
+        print("last_action: ", self.last_action)
+        return super().step(discretized_action)
+    
+class HVACEnvDiffAction(HVACEnv):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.action_resulotion_temp = 0.1
+
+        min_temp = -3.0
+        max_temp = 3.0
+        action_diff_resulotion = 0.5
+        self.num_steps = int((max_temp - min_temp) / action_diff_resulotion) + 1
+        self.discrete_values = numpy.linspace(min_temp, max_temp, self.num_steps)
+    
+    def _diff_action(self, action):
+
+        if isinstance(self.action_space, gym.spaces.Dict):
+            discretized_action = deepcopy(action)
+            if 'value' in discretized_action:
+                indices = np.clip(np.round(action['value'] * (self.num_steps - 1)), 0, self.num_steps - 1).astype(int)
+                discrete_diff_value = self.discrete_values[indices]
+                last_temp = self.last_action['value'] * (self.upper_bound - self.lower_bound) + self.lower_bound
+                current_temp = last_temp + discrete_diff_value
+                discretized_current_temp = np.round(current_temp / self.action_resulotion_temp).astype(int) * self.action_resulotion_temp
+                current_action = np.clip(
+                    (discretized_current_temp - self.lower_bound) / (self.upper_bound - self.lower_bound),
+                    0.0, 1.0
+                )
+                discrete_diff_value['value'] = current_action
+                return discrete_diff_value
+        else:
+            n_coolers = len(self.coolers)
+            switch_part = action[:n_coolers]
+            value_part = action[n_coolers:]
+            indices = np.clip(np.round(value_part * (self.num_steps - 1)), 0, self.num_steps - 1).astype(int)
+            discrete_diff_value = self.discrete_values[indices]
+            last_temp = self.last_action['value'] * (self.upper_bound - self.lower_bound) + self.lower_bound
+            current_temp = last_temp + discrete_diff_value
+            discretized_current_temp = np.round(current_temp / self.action_resulotion_temp).astype(int) * self.action_resulotion_temp
+            current_action = np.clip(
+                (discretized_current_temp - self.lower_bound) / (self.upper_bound - self.lower_bound),
+                0.0, 1.0
+            )
+            return np.concatenate([switch_part, current_action])
+        
+    def step(self, action):
+        discretized_action = self._diff_action(action)
+        print("last_action: ", self.last_action)
+        return super().step(discretized_action)
