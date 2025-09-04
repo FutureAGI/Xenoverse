@@ -125,25 +125,29 @@ class HVACEnv(gym.Env):
             return np.concatenate((sensor_readings, heat_readings))
 
         elif self.include_switch and not self.include_last_action:
-            switch_sign = numpy.where(self.last_action["switch"] < 0.5, -1, 1)
+            last_switch_sign = numpy.where(self.last_action["switch"] < 0.5, -1, 1)
+            current_switch_sign = numpy.where(self.current_action["switch"] < 0.5, -1, 1)
             last_switch_time = (self.t - self.cooler_last_switch_time)
             switch_obs =  numpy.zeros(last_switch_time.shape, dtype=numpy.float32)
-            switch_obs[last_switch_time < 1800] = 1.0
-            condition = (switch_sign == 1) & (last_switch_time > 172800)
-            switch_obs[condition] = 2.0
+            switch_obs[(last_switch_time < 1800) & 
+                       (last_switch_sign != current_switch_sign) &
+                       (self.cooler_last_switch_time > self.start_time)] = 1.0
+            switch_obs[(last_switch_sign == 1) & (last_switch_time > 172800)] = 2.0
             return  np.concatenate((sensor_readings, switch_obs))
         
         elif self.include_switch and self.include_last_action:
-            switch_sign = numpy.where(self.last_action["switch"] < 0.5, -1, 1)
+            last_switch_sign = numpy.where(self.last_action["switch"] < 0.5, -1, 1)
+            current_switch_sign = numpy.where(self.current_action["switch"] < 0.5, -1, 1)
             action_temp = self.last_action["value"] * (self.upper_bound - self.lower_bound) + self.lower_bound
-            off_coolers_mask = switch_sign == 1
+            off_coolers_mask = last_switch_sign == 1
             action_temp[off_coolers_mask] = -1.0
 
             last_switch_time = (self.t - self.cooler_last_switch_time)
             switch_obs =  numpy.zeros(last_switch_time.shape, dtype=numpy.float32)
-            switch_obs[last_switch_time < 1800] = 1.0
-            condition = (switch_sign == 1) & (last_switch_time > 172800)
-            switch_obs[condition] = 2.0
+            switch_obs[(last_switch_time < 1800) & 
+                       (last_switch_sign != current_switch_sign) &
+                       (self.cooler_last_switch_time > self.start_time)] = 1.0
+            switch_obs[(last_switch_sign == 1) & (last_switch_time > 172800)] = 2.0
 
             return  np.concatenate((sensor_readings, action_temp, switch_obs))
 
@@ -179,14 +183,17 @@ class HVACEnv(gym.Env):
         self.state = self.state + numpy.random.normal(0, 2.0, (self.n_width, self.n_length)) 
         if self.random_start_t:
             self.t = numpy.random.uniform(0,self.max_steps * self.iter_per_step * self.sec_per_iter)
+            self.start_time = self.t
         else:
             self.t = 0.0
+            self.start_time = self.t
         self.sliding_t = 120 * np.random.randint(0, 2520, size=len(self.equipments), dtype=np.int32) # 发热功率每次reset滑窗  # 2520
 
         self.episode_step = 0
         self.warning_count = 0
 
         self.n_coolers = len(self.coolers)
+        self.n_sensor = len(self.sensors)
         self.cooler_last_switch_time = np.zeros(self.n_coolers)
         self.cooler_last_state = np.zeros(self.n_coolers)
 
@@ -526,6 +533,12 @@ class HVACEnvDiffAction(HVACEnv):
         action_diff_resulotion = 0.5
         self.num_steps = int((max_temp - min_temp) / action_diff_resulotion) + 1
         self.discrete_values = numpy.linspace(min_temp, max_temp, self.num_steps)
+
+        self.avg_cooler_power_per_step = 0.0
+        self.over_heat_percentage = [0.0, 0.0, 0.0, 0.0] # percentage over 0, 2, 4, 6 degree
+        self.bad_switch_percentage = [0.0, 0.0] #  below boundary, over boundary
+        self.fail_percentage = 0.0
+
     
     def _diff_action(self, action):
 
@@ -560,4 +573,74 @@ class HVACEnvDiffAction(HVACEnv):
         
     def step(self, action):
         discretized_action = self._diff_action(action)
-        return super().step(discretized_action)
+        normalized_obs, reward, terminated, truncated, info = super().step(discretized_action)
+
+        self.stat(normalized_obs, terminated, info)
+
+        return normalized_obs, reward, terminated, truncated, info
+    
+    def stat(self, normalized_obs, terminated, info):
+        # power stat
+        current_step = self.episode_step
+        current_cool_power = round(np.sum(info.get("cool_power", 0)),4)
+        self.avg_cooler_power_per_step = (self.avg_cooler_power_per_step * (current_step - 1) + current_cool_power) / current_step
+        # over heat percentage
+        if self.return_normilized_obs:
+            sensor_reading = self._denormalize_obs(normalized_obs)[:self.n_sensor]
+        else:
+            sensor_reading = normalized_obs[:self.n_sensor]
+        current_over_heat_reading = sensor_reading - self.failure_upperbound
+        current_count = []
+        current_count.append(numpy.sum(current_over_heat_reading > 0))
+        current_count.append(numpy.sum(current_over_heat_reading > 2))
+        current_count.append(numpy.sum(current_over_heat_reading > 4))
+        current_count.append(numpy.sum(current_over_heat_reading > 6))
+        last_counts = [
+                p * (current_step - 1) * self.n_sensor 
+                for p in self.over_heat_percentage
+            ]
+        self.over_heat_percentage = [
+            (last + current) / (current_step * self.n_sensor)
+            for last, current in zip(last_counts, current_count)
+        ]
+        # bad switch stat
+        if self.include_switch:
+            switch_obs = normalized_obs[-self.n_coolers:]
+            count_switch_too_late = numpy.sum(switch_obs > 1.5)
+            count_switch_too_soon = numpy.sum(switch_obs > 0.5) - count_switch_too_late
+            self.bad_switch_percentage[0] = (self.bad_switch_percentage[0] * self.n_coolers * (current_step - 1) 
+                                             + count_switch_too_soon) / (self.n_coolers * current_step)
+            self.bad_switch_percentage[1] = (self.bad_switch_percentage[1] * self.n_coolers * (current_step - 1) 
+                                             + count_switch_too_late) / (self.n_coolers * current_step)
+        # fail stat
+        self.fail_percentage = (self.fail_percentage * (current_step - 1) + int(terminated)) / current_step
+
+        # print
+        if (self.verbose):
+            print(f"Step {current_step}:")
+            print(f"  Avg Cooler Power: {self.avg_cooler_power_per_step:.4f} per step")
+            
+            print("  Overheat Statistics:")
+            print(f"    >0°C: {current_count[0]} sensors ({self.over_heat_percentage[0]*100:.2f}%)")
+            print(f"    >2°C: {current_count[1]} sensors ({self.over_heat_percentage[1]*100:.2f}%)")
+            print(f"    >4°C: {current_count[2]} sensors ({self.over_heat_percentage[2]*100:.2f}%)")
+            print(f"    >6°C: {current_count[3]} sensors ({self.over_heat_percentage[3]*100:.2f}%)")
+            
+            if self.include_switch:
+                print("  Switch Statistics:")
+                print(f"    Too Soon: {count_switch_too_soon} coolers ({self.bad_switch_percentage[0]*100:.2f}%)")
+                print(f"    Too Late: {count_switch_too_late} coolers ({self.bad_switch_percentage[1]*100:.2f}%)")
+            
+            print(f"  Fail Percentage: {self.fail_percentage*100:.2f}%")
+            print("-" * 50)
+        
+
+    def _denormalize_obs(self, normalized_obs):
+        if self.include_switch:
+            
+            denormalized_obs = normalized_obs.copy()
+            
+            denormalized_obs[:self.n_sensor] = normalized_obs[:self.n_sensor] * 20.0 + 30.0
+            
+            return denormalized_obs
+        return normalized_obs

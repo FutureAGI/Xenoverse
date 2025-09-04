@@ -49,16 +49,15 @@ if __name__ == "__main__":
         # action = env.sample_action(mode="max")
 
         # RL
-        action = model.predict(obs)
+        # action = model.predict(obs)
         
         # pid
-        # action = pid.policy(obs[:n_sensors])
+        action = pid.policy(obs[:n_sensors])
         
         obs, reward, terminated, truncated, info = env.step(action)
-
         env_action = env.last_action
-        switch = action[:n_coolers]
-        value = action[n_coolers:]
+        switch = env_action["switch"]
+        value = env_action["value"]
         for i in range(len(switch)):
             if switch[i]<0.5:
                 value[i] = -1.0
