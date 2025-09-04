@@ -18,7 +18,7 @@ def plot_equipment_heat_curves(task_file_path):
     env.set_task(task)
     
     # 时间范围 (0 到 5040 秒)，每秒一个点
-    time_steps = np.arange(0, 151200, 30)  # 每秒一个点
+    time_steps = np.arange(0, 604800, 30)  # 每秒一个点
     
     # 为每个设备创建发热曲线
     plt.figure(figsize=(15, 10))
@@ -45,23 +45,23 @@ def plot_equipment_heat_curves(task_file_path):
     plt.show()
     
     # 另外保存每个设备的单独图表到plot目录
-    for i, equipment in enumerate(env.equipments):
-        plt.figure(figsize=(10, 6))
-        heat_values = []
-        for t in time_steps:
-            heat = equipment(t)["heat"]
-            heat_values.append(heat)
+    # for i, equipment in enumerate(env.equipments):
+    #     plt.figure(figsize=(10, 6))
+    #     heat_values = []
+    #     for t in time_steps:
+    #         heat = equipment(t)["heat"]
+    #         heat_values.append(heat)
         
-        plt.plot(time_steps, heat_values, color='blue')
-        plt.title(f'Equipment {i+1} Heat Output Over Time')
-        plt.xlabel('Time (seconds)')
-        plt.ylabel('Heat Output (W)')
-        plt.grid(True)
-        plt.savefig(os.path.join(plot_dir, f'equipment_{i+1}_heat_curve.png'), dpi=300)
-        plt.close()
+    #     plt.plot(time_steps, heat_values, color='blue')
+    #     plt.title(f'Equipment {i+1} Heat Output Over Time')
+    #     plt.xlabel('Time (seconds)')
+    #     plt.ylabel('Heat Output (W)')
+    #     plt.grid(True)
+    #     plt.savefig(os.path.join(plot_dir, f'equipment_{i+1}_heat_curve.png'), dpi=300)
+    #     plt.close()
 
 if __name__ == "__main__":
     # 替换为你的任务文件路径
-    task_file_path = "./task_file/period_test.pkl"
+    task_file_path = "./task_file/hvac_task_config_0904_diff_action.pkl"
     plot_equipment_heat_curves(task_file_path)
     print(f"所有图表已保存到 {os.path.abspath('./plot')} 目录")

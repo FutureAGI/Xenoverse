@@ -3,15 +3,15 @@
 if __name__ == "__main__":
 
     from xenoverse.anyhvac.anyhvac_env_vis import HVACEnvVisible
-    from xenoverse.anyhvac.anyhvac_env import HVACEnv
+    from xenoverse.anyhvac.anyhvac_env import HVACEnv, HVACEnvDiscreteAction, HVACEnvDiffAction
     from xenoverse.anyhvac.anyhvac_sampler import HVACTaskSampler
     from rl_trainer import HVACRLTrainer
     import gymnasium as gym
 
     import pickle 
-    TASK_CONFIG_PATH = "./task_file/hvac_task_config_0828_1.pkl"
+    TASK_CONFIG_PATH = "./task_file/hvac_task_config_0903_discrete_action.pkl"
     load_path = "./models/0828/temp/1/sac_random_start_no_normal/sac_stage2.zip"
-    save_path = "./models/0828/temp/1/sac_random_start_no_normal/sac2_stage1.zip"
+    save_path = "./models/0901/temp/1/rppo_stage1.zip"
     visual = False
 
 
@@ -35,7 +35,7 @@ if __name__ == "__main__":
             return env
     else:
         def make_env():
-            env = HVACEnv()
+            env = HVACEnvDiffAction()
             env.set_task(task)
             # env.set_return_normilized_obs(True)
             env.set_random_start_t(True)
@@ -44,9 +44,9 @@ if __name__ == "__main__":
 
     trainer = HVACRLTrainer(
         env_maker=make_env,
-        n_envs=72,  # 并行环境数
+        n_envs=64,  # 并行环境数
         vec_env_type="subproc",  # 向量环境类型
-        algorithm="sac",  # 可选 "ppo" 或 "sac"
+        algorithm="rppo",  # 可选 "ppo" 或 "sac"
         stage_steps=100,  # 每5000步统计一次平均奖励
         vec_env_args={
             "start_method": "spawn"

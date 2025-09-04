@@ -514,7 +514,6 @@ class HVACEnvDiscreteAction(HVACEnv):
     
     def step(self, action):
         discretized_action = self._discretize_action(action)
-        print("last_action: ", self.last_action)
         return super().step(discretized_action)
     
 class HVACEnvDiffAction(HVACEnv):
@@ -561,5 +560,4 @@ class HVACEnvDiffAction(HVACEnv):
         
     def step(self, action):
         discretized_action = self._diff_action(action)
-        print("last_action: ", self.last_action)
         return super().step(discretized_action)
