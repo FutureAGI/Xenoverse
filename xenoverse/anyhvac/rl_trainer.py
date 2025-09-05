@@ -96,20 +96,20 @@ class HVACRLTrainer:
         if self.algorithm == "rppo":
             print("Use RecurrentPPO!")
             return RecurrentPPO(
-                batch_size=64 * self.n_envs,
-                n_steps=1024 // self.n_envs,
+                batch_size= int(32 * self.n_envs / 4),
+                n_steps= 32,
                 **common_params
             )
         elif self.algorithm == "ppo":
             print("Use PPO!")
             return PPO(
-                batch_size=64 * self.n_envs,
-                n_steps=1024 // self.n_envs,
+                batch_size= int(32 * self.n_envs / 4),
+                n_steps= 32,
                 **common_params
             )
         elif self.algorithm == "sac":
             return SAC(
-                batch_size=256,
+                batch_size= 16 * self.n_envs,
                 learning_starts=10000 // self.n_envs,
                 **common_params
             )

@@ -26,7 +26,7 @@ class HVACEnv(gym.Env):
         self.failure_upperbound = failure_upperbound
         self.failure_reward = -100
         self.energy_reward_wht = -10.0 #-3.0   
-        self.switch_reward_wht = -5.0 
+        self.switch_reward_wht = -2.0 
         self.target_reward_wht = -0.5  
         self.base_reward = 1.0 # survive bonus
         self.iter_per_step = iter_per_step
@@ -178,7 +178,8 @@ class HVACEnv(gym.Env):
         # Add some initial noise
         self.state = self.state + numpy.random.normal(0, 2.0, (self.n_width, self.n_length)) 
         if self.random_start_t:
-            self.t = numpy.random.uniform(0,self.max_steps * self.iter_per_step * self.sec_per_iter)
+            max_value = int(self.max_steps * self.iter_per_step * self.sec_per_iter)
+            self.t = numpy.random.randint(0, max_value)
             self.start_time = self.t
         else:
             self.t = 0.0
