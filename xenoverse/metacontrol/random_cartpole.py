@@ -37,6 +37,7 @@ class RandomCartPoleEnv(CartPoleEnv):
         self.frameskip = kwargs.get("frameskip", 5)
         self.reset_bounds_scale = kwargs.get("reset_bounds_scale", numpy.array([0.45, 0.90, 0.13, 1.0]))
         if(isinstance(self.reset_bounds_scale, list)):
+            assert len(self.reset_bounds_scale) == 4, "reset_bounds_scale should be a list of 4 elements"
             self.reset_bounds_scale = numpy.array(self.reset_bounds_scale)
         kwargs.pop("frameskip", None)
         kwargs.pop("reset_bounds_scale", None)
@@ -58,7 +59,6 @@ class RandomCartPoleEnv(CartPoleEnv):
             if terminated or truncated:
                 break
         return obs, total_reward, terminated, truncated, info
-
 
     def reset(
         self,

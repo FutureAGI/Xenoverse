@@ -15,6 +15,7 @@
 from gymnasium.envs.registration import register
 from xenoverse.metacontrol.random_cartpole import sample_cartpole,RandomCartPoleEnv
 from xenoverse.metacontrol.random_acrobot import sample_acrobot, RandomAcrobotEnv
+from xenoverse.metacontrol.random_humanoid import RandomHumanoidEnv
 
 register(
     id='random-cartpole-v0',
@@ -29,4 +30,11 @@ register(
     order_enforce=False,
     disable_env_checker=True,
     kwargs={"frameskip":1, "reset_bounds_scale":0.10}
+)
+register(
+    id='random-humanoid-v0',
+    entry_point='xenoverse.metacontrol.random_humanoid:RandomHumanoidEnv',
+    order_enforce=False,
+    disable_env_checker=True,
+    kwargs={}
 )
