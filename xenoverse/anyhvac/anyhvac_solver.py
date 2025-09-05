@@ -12,8 +12,7 @@ class HVACSolverGTPID:
 
         required_attrs = [
             'sensors', 'coolers', 'target_temperature', 
-            'sec_per_step', 'lower_bound', 'upper_bound',
-            'include_time_in_observation', 'include_heat_in_observation'
+            'sec_per_step', 'lower_bound', 'upper_bound'
         ]
         
         for attr in required_attrs:
@@ -51,17 +50,11 @@ class HVACSolverGTPID:
         which might include a time component.
         """
         obs_array = numpy.array(observation_with_time)
-        if self.env.include_time_in_observation or self.env.include_heat_in_observation: 
+        if obs_array.shape[0] > len(self.sensors):
+            return obs_array[:len(self.sensors)]
+        elif obs_array.shape[0] == len(self.sensors): 
+            return obs_array
 
-            if obs_array.shape[0] > len(self.sensors):
-                return obs_array[:len(self.sensors)]
-            
-            elif obs_array.shape[0] == len(self.sensors): 
-                return obs_array
-            else: 
-                raise ValueError(f"Observation shape {obs_array.shape} incompatible with num_sensors {len(self.sensors)} and include_time_in_observation=True")
-        else:
-            return obs_array # No time feature expected
     def policy(self, observation):
         # 兼容observation含有t的情况
         current_sensor_readings = self._extract_sensor_readings(observation)

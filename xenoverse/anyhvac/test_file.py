@@ -55,7 +55,7 @@ if __name__ == "__main__":
         action = pid.policy(obs[:n_sensors])
         
         obs, reward, terminated, truncated, info = env.step(action)
-        env_action = env.last_action
+        env_action = env.last_action.copy()
         switch = env_action["switch"]
         value = env_action["value"]
         for i in range(len(switch)):

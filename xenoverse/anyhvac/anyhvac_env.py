@@ -26,7 +26,7 @@ class HVACEnv(gym.Env):
         self.failure_upperbound = failure_upperbound
         self.failure_reward = -100
         self.energy_reward_wht = -10.0 #-3.0   
-        self.switch_reward_wht = -1.0 
+        self.switch_reward_wht = -5.0 
         self.target_reward_wht = -0.5  
         self.base_reward = 1.0 # survive bonus
         self.iter_per_step = iter_per_step
@@ -126,18 +126,15 @@ class HVACEnv(gym.Env):
 
         elif self.include_switch and not self.include_last_action:
             last_switch_sign = numpy.where(self.last_action["switch"] < 0.5, -1, 1)
-            current_switch_sign = numpy.where(self.current_action["switch"] < 0.5, -1, 1)
             last_switch_time = (self.t - self.cooler_last_switch_time)
             switch_obs =  numpy.zeros(last_switch_time.shape, dtype=numpy.float32)
             switch_obs[(last_switch_time < 1800) & 
-                       (last_switch_sign != current_switch_sign) &
                        (self.cooler_last_switch_time > self.start_time)] = 1.0
             switch_obs[(last_switch_sign == 1) & (last_switch_time > 172800)] = 2.0
             return  np.concatenate((sensor_readings, switch_obs))
         
         elif self.include_switch and self.include_last_action:
             last_switch_sign = numpy.where(self.last_action["switch"] < 0.5, -1, 1)
-            current_switch_sign = numpy.where(self.current_action["switch"] < 0.5, -1, 1)
             action_temp = self.last_action["value"] * (self.upper_bound - self.lower_bound) + self.lower_bound
             off_coolers_mask = last_switch_sign == 1
             action_temp[off_coolers_mask] = -1.0
@@ -145,7 +142,6 @@ class HVACEnv(gym.Env):
             last_switch_time = (self.t - self.cooler_last_switch_time)
             switch_obs =  numpy.zeros(last_switch_time.shape, dtype=numpy.float32)
             switch_obs[(last_switch_time < 1800) & 
-                       (last_switch_sign != current_switch_sign) &
                        (self.cooler_last_switch_time > self.start_time)] = 1.0
             switch_obs[(last_switch_sign == 1) & (last_switch_time > 172800)] = 2.0
 
@@ -573,6 +569,7 @@ class HVACEnvDiffAction(HVACEnv):
         
     def step(self, action):
         discretized_action = self._diff_action(action)
+        self.copy_last_action = self.last_action.copy()
         normalized_obs, reward, terminated, truncated, info = super().step(discretized_action)
 
         self.stat(normalized_obs, terminated, info)
@@ -606,8 +603,13 @@ class HVACEnvDiffAction(HVACEnv):
         # bad switch stat
         if self.include_switch:
             switch_obs = normalized_obs[-self.n_coolers:]
+            last_switch_sign = numpy.where(self.copy_last_action["switch"] < 0.5, -1, 1)
+            current_switch_sign = numpy.where(self.current_action["switch"] < 0.5, -1, 1)
+            condition_too_soon = (switch_obs > 0.5) & (switch_obs < 1.5) & (last_switch_sign != current_switch_sign)
+            count_switch_too_soon = numpy.sum(condition_too_soon)
             count_switch_too_late = numpy.sum(switch_obs > 1.5)
-            count_switch_too_soon = numpy.sum(switch_obs > 0.5) - count_switch_too_late
+            
+            
             self.bad_switch_percentage[0] = (self.bad_switch_percentage[0] * self.n_coolers * (current_step - 1) 
                                              + count_switch_too_soon) / (self.n_coolers * current_step)
             self.bad_switch_percentage[1] = (self.bad_switch_percentage[1] * self.n_coolers * (current_step - 1) 
