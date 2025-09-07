@@ -165,9 +165,9 @@ class HeaterUnc(BaseVentilator):
         if("period_range" in kwargs):
             self.period = rnd.randint(*kwargs["period_range"])
         if(self.base_heater == None):
-            self.period = rnd.randint(43200, 86400)  # period of the heat source, 0.5 ~ 1 days
+            self.period = rnd.randint(21600, 86400)  # period of the heat source, 0.25 ~ 1 days
         else:
-            self.period = rnd.randint(86400, 604800)  # period of the heat source, 1 ~ 7 days 
+            self.period = rnd.randint(43200, 86400)  # period of the heat source, 0.5 ~ 1 days 
         if("heat_variant_scale" in kwargs):
             self.heat_variant_scale = rnd.uniform(*kwargs["heat_variant_scale"])
         else:

@@ -109,7 +109,7 @@ class HVACRLTrainer:
             )
         elif self.algorithm == "sac":
             return SAC(
-                batch_size= 16 * self.n_envs,
+                batch_size= 512,
                 learning_starts=10000 // self.n_envs,
                 **common_params
             )
@@ -170,6 +170,8 @@ class TrainingLoggerCallback(BaseCallback):
         """ 记录每个步骤的奖励和信息统计 """
 
         # 原始数据记录
+        current_obs = self.model.env.get_attr("current_obs")[0]
+        current_action = self.model.env.get_attr("current_action")[0]
         self.current_stage.append(self.locals["rewards"][0])
         info = self.locals["infos"][0]
         self.current_info.append(info)  # 保存完整的info字典
@@ -200,8 +202,11 @@ class TrainingLoggerCallback(BaseCallback):
 
 
             # print("self.current_stage",self.current_stage )
-            info_total = f"energy_cost: {round(info.get('energy_cost', 0),4)}, target_cost: {round(info.get('target_cost', 0),4)}, switch_cost: {round(info.get('switch_cost', 0),4)},cool_power: {cool_power}, heat_power: {heat_power}"
-            
+            info_total = f"energy_cost: {round(info.get('energy_cost', 0), 4)}, " \
+                         f"target_cost: {round(info.get('target_cost', 0), 4)}, " \
+                         f"switch_cost: {round(info.get('switch_cost', 0), 4)}, " \
+                         f"action_cost: {round(info.get('action_cost', 0), 4)}, " \
+                         f"cool_power: {cool_power}, heat_power: {heat_power}"
             # 计算各信息字段均值
             # info_means = {
             #     key: self.info_sums[key] / self.info_counts[key] 
@@ -210,7 +215,8 @@ class TrainingLoggerCallback(BaseCallback):
 
             # 格式化输出
             print(f"Step {self.model.num_timesteps} | over_heat:{over_heat} | over_tolerace:{over_tolerace} | Reward: {mean_reward:.2f} | {info_total}", flush=True)
-            
+            print("current_obs: ", current_obs)
+            # print("current_action: ", current_action)
             # 重置统计量
             self.current_stage = []
             self.info_sums = {k:0.0 for k in self.info_sums}
