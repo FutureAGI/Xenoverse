@@ -646,8 +646,11 @@ class HVACEnvDiscreteAction(HVACEnv):
             return discretized_action
         else:
             n_coolers = len(self.coolers)
-            switch_part = action[:n_coolers]
-            value_part = action[n_coolers:]
+            if not self.no_switch_action:
+                switch_part = action[:n_coolers]
+                value_part = action[n_coolers:]
+            else:
+                value_part = action[:n_coolers]
             
             temp_value = value_part * (self.upper_bound - self.lower_bound) + self.lower_bound
             discretized_temp = np.round(temp_value / self.action_resulotion_temp).astype(int) * self.action_resulotion_temp
@@ -655,7 +658,10 @@ class HVACEnvDiscreteAction(HVACEnv):
                 (discretized_temp - self.lower_bound) / (self.upper_bound - self.lower_bound),
                 0.0, 1.0
             )
-            return np.concatenate([switch_part, discretized_value])
+            if not self.no_switch_action:
+                return np.concatenate([switch_part, discretized_value])
+            else:
+                return discretized_value
     
     def step(self, action):
         discretized_action = self._discretize_action(action)
