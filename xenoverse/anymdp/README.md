@@ -2,6 +2,10 @@
 
 Scalable procedurally generated Markov Decision Processes (MDPs) by randomizing the reward matrix and transition matrix. 
 
+# Download pre-generated datasets and tasks
+
+- Training DataSet (Large) with 512K sequences and 6B time steps can be downloaded from [here](https://www.kaggle.com/datasets/anonymitynobody/omnirl-training-data-d-large).
+- Online evaluating task set and static validation dataset for AnyMDP can be downloaded from [here](https://www.kaggle.com/datasets/anonymitynobody/omnirl-evaluation).
 
 # Install
 
