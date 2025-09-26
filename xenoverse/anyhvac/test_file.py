@@ -3,6 +3,7 @@ if __name__ == "__main__":
     import matplotlib.pyplot as plt
     import pandas as pd
     import os
+    from copy import deepcopy
     from xenoverse.anyhvac.anyhvac_env_vis import HVACEnvVisible, HVACEnv
     from xenoverse.anyhvac.anyhvac_sampler import HVACTaskSampler
     from xenoverse.anyhvac.anyhvac_solver import HVACSolverGTPID
@@ -10,9 +11,10 @@ if __name__ == "__main__":
     import pickle 
     from rl_trainer import HVACRLTester
 
-    env = HVACEnvDiffAction(verbose=True)
-    TASK_CONFIG_PATH = "./task_file/hvac_task_config_0904_diff_action.pkl"
-    RL_MODEL_PATH = "./models/0828/temp/1/sac_random_start_no_normal/sac2_stage1.zip"
+    env = HVACEnvDiffAction(reward_mode = 2, verbose=True)
+    TASK_CONFIG_PATH = "./task_file/hvac_task_config_0906.pkl"
+    RL_MODEL_PATH = "./output/0906/0915/mode_2/diff_sac/sac_reward_3_0_5_stage2.zip"
+    output_dir = "./output/0906/0915/mode_2/diff_sac/stage2_output/"
     model = HVACRLTester(RL_MODEL_PATH, "sac", "cpu")
     try:
         with open(TASK_CONFIG_PATH, "rb") as f:
@@ -31,11 +33,12 @@ if __name__ == "__main__":
     print("target_temperature: ", task['target_temperature'])
     # env.set_control_type("power")
     # env.set_return_normilized_obs(True)
+    # env.set_random_start_t(True)
     
     terminated, truncated = False,False
     obs = env.reset()[0]
     pid = HVACSolverGTPID(env)
-    max_steps = 500
+    max_steps = 20160
     current_stage = []
     steps = 0
     n_coolers = len(env.coolers)
@@ -46,32 +49,33 @@ if __name__ == "__main__":
     cool_power_count = 0
     while steps < max_steps:
         # Max coolers power
-        # action = env.sample_action(mode="max")
+        action = env.sample_action(mode="max")
 
         # RL
         # action = model.predict(obs)
         
         # pid
-        action = pid.policy(obs[:n_sensors])
+        # action = 1 - pid.policy(obs[:n_sensors])[n_coolers:]
         
         obs, reward, terminated, truncated, info = env.step(action)
-        env_action = env.last_action.copy()
+        env_action = deepcopy(env.last_action)
         switch = env_action["switch"]
         value = env_action["value"]
         for i in range(len(switch)):
             if switch[i]<0.5:
                 value[i] = -1.0
-
+        print("switch: ", env_action["switch"])
+        print("action: ", value * (env.upper_bound - env.lower_bound) + env.lower_bound)
         # print(value)
         values.append(value)
 
         # print("t: ",env.t)
-        # print(obs)
+        print(obs[:n_sensors])
         if 'cool_power' in info:
             cool_power_sum += numpy.sum(info['cool_power'])
             cool_power_count += 1
-        if terminated or truncated:
-            break
+        # if terminated or truncated:
+        #     break
         current_stage.append(reward)
         if steps < 1:
             print("info.keys(): ", info.keys())
@@ -105,7 +109,6 @@ if __name__ == "__main__":
     else:
         print("\nno data")
     
-    output_dir = "output"
     os.makedirs(output_dir, exist_ok=True)
 
     values_array = numpy.array(values)
@@ -123,6 +126,9 @@ if __name__ == "__main__":
     n_cols = min(4, n_coolers)
     n_rows = (n_coolers + n_cols - 1) // n_cols
 
+    min_width_per_plot *= 4 
+    max_width *= 4  
+    
     fig_width = min(n_cols * min_width_per_plot, max_width)
     fig_height = min(n_rows * min_height_per_plot, max_height)
 
@@ -142,7 +148,7 @@ if __name__ == "__main__":
         
         cooler_values = values_array[:, i]
         
-        ax.plot(cooler_values, 'b-', linewidth=1.5)
+        ax.plot(cooler_values, 'b-', linewidth=0.5)
         
         ax.set_title(f"Cooler {i}", fontsize=10)
         ax.set_xlabel("Time Step", fontsize=8)
@@ -150,10 +156,9 @@ if __name__ == "__main__":
         ax.set_ylim(-1.1, 1.1)
         ax.grid(True, linestyle='--', alpha=0.7)
         
-        if n_coolers > 12:
-            ax.tick_params(axis='both', which='major', labelsize=6)
+        ax.tick_params(axis='both', which='major', labelsize=8)
 
-    plt.tight_layout(pad=2.0)  
+    plt.tight_layout(pad=3.0, h_pad=2.0, w_pad=2.0)
     plot_path = os.path.join(output_dir, "cooler_values_plot.png")
     plt.savefig(plot_path, dpi=300)
     print(f"figure save to: {plot_path}")

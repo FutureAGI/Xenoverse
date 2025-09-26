@@ -1,5 +1,6 @@
 # rl_trainer.py
 import os
+import torch
 import numpy as np
 import gymnasium as gym
 import numbers
@@ -109,8 +110,22 @@ class HVACRLTrainer:
             )
         elif self.algorithm == "sac":
             return SAC(
-                batch_size= 512,
-                learning_starts=10000 // self.n_envs,
+                policy_kwargs={
+                    "net_arch": {
+                        "pi": [512, 256, 128],  # Actor（策略网络）的隐藏层结构
+                        "qf": [512, 512, 256]   # Critic（价值网络）的隐藏层结构
+                    },
+                    "activation_fn": torch.nn.ReLU  # 高维数据常用ReLU增强非线性表达
+                },
+                buffer_size = 10000000, # 1e7
+                batch_size = 1024,  # 增大批量（利用多核CPU并行计算，同时稳定梯度）
+                learning_starts = 10000, # 先采集1万步初始经验（高维环境需要更多初始探索）
+                train_freq=(1, "step"),  # 每步都训练（长周期环境需及时更新策略）
+                gradient_steps=4,    # 每次训练更新4步（充分利用采样的batch数据）
+                gamma=0.995, # 稍大于默认的0.99（长周期环境更重视远期奖励）
+                use_sde=True,    # 开启SDE（高维动作空间需要更强的随机探索）
+                sde_sample_freq=16,  # 每16步重新采样噪声（平衡探索随机性和稳定性）
+                ent_coef="auto",
                 **common_params
             )
 

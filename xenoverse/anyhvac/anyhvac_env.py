@@ -9,7 +9,6 @@ from copy import deepcopy
 class HVACEnv(gym.Env):
     def __init__(self,
                  max_steps=20160,  # sec_per_iter * iter_per_step * max_steps / 86400 days
-                 failure_upperbound=40, # triggers failure above this temperature
                  iter_per_step=150,
                  sec_per_iter=0.2,
                  set_lower_bound=16,
@@ -27,11 +26,11 @@ class HVACEnv(gym.Env):
         self.observation_space = gym.spaces.Box(low=-273, high=273, shape=(1,), dtype=numpy.float32)
         self.action_space = None
         self.max_steps = max_steps
-        self.failure_upperbound = failure_upperbound
-        self.failure_reward = -100
+        self.failure_reward = -5
+        self.overheat_reward = -1
         self.energy_reward_wht = -3.0 #-3.0   
         self.switch_reward_wht = -20.0 
-        self.target_reward_wht = -0.3
+        self.target_reward_wht = -0.5
         self.action_diff_wht = -0.1 
         self.base_reward = 1.0 # survive bonus
         self.iter_per_step = iter_per_step
@@ -52,6 +51,7 @@ class HVACEnv(gym.Env):
         self.reward_mode = reward_mode
         # stat
         self.avg_cooler_power_per_step = 0.0
+        self.avg_reward = 0.0
         self.over_heat_percentage = [0.0, 0.0, 0.0, 0.0] # percentage over 0, 2, 4, 6 degree
         self.over_cool_percentage = [0.0, 0.0, 0.0, 0.0] # percentage lower 0, -2, -4, -6 degree
         self.bad_switch_percentage = [0.0, 0.0] #  below boundary, over boundary
@@ -62,7 +62,10 @@ class HVACEnv(gym.Env):
             self.__dict__[key] = task[key]
         self.task_set = True
         self.heat_capacity = task.get('heat_capacity', []) 
-        self.equipments = task.get('equipments', []) 
+        self.equipments = task.get('equipments', [])
+
+        # triggers failure above this temperature
+        self.failure_upperbound = numpy.mean(self.target_temperature + 10)
         
         n_coolers = len(self.coolers)
         n_sensors = len(self.sensors)
@@ -367,9 +370,11 @@ class HVACEnv(gym.Env):
         hard_loss = (obs_arr > self.failure_upperbound).any()
         overheat = 0
         over_tolerace = 0
+        overheat_cost = 0
         if(hard_loss):
             self.warning_count += 1
             overheat = 1
+            overheat_cost = self.overheat_reward
         else:
             self.warning_count -= 1
             self.warning_count = max(self.warning_count, 0)
@@ -381,8 +386,6 @@ class HVACEnv(gym.Env):
             def calculate_penalty(diff):
                 if diff < -5:
                     return (diff + 5) ** 2
-                elif diff > 2:
-                    return (diff - 2) ** 2
                 else:
                     return 0.0
             action_cost = self.action_diff_wht * numpy.mean(numpy.vectorize(calculate_penalty)(action_diff))
@@ -400,7 +403,7 @@ class HVACEnv(gym.Env):
             info["over_tolerace"] = 1
             return self.failure_reward, True, info
         
-        return (self.base_reward + target_cost + switch_cost + energy_cost + action_cost,  
+        return (self.base_reward + target_cost + switch_cost + energy_cost + action_cost + overheat_cost,  
                 False, info)
     
     def _unflatten_action(self, action_flat):
@@ -572,17 +575,18 @@ class HVACEnv(gym.Env):
         action[n_coolers:] = a
 
         return action
-    def stat(self, normalized_obs, terminated, info):
+    def stat(self, normalized_obs, terminated, info, reward):
         # power stat
         current_step = self.episode_step
         current_cool_power = round(np.sum(info.get("cool_power", 0)),4)
         self.avg_cooler_power_per_step = (self.avg_cooler_power_per_step * (current_step - 1) + current_cool_power) / current_step
+        self.avg_reward = (self.avg_reward * (current_step - 1) + reward) / current_step
         # over heat percentage
         if self.return_normilized_obs:
             sensor_reading = self._denormalize_obs(normalized_obs)[:self.n_sensor]
         else:
             sensor_reading = normalized_obs[:self.n_sensor]
-        current_over_heat_reading = sensor_reading - self.failure_upperbound
+        current_over_heat_reading = sensor_reading - self.target_temperature
         # overheat
         current_count_overheat = []
         current_count_overheat.append(numpy.sum(current_over_heat_reading > 0))
@@ -598,11 +602,12 @@ class HVACEnv(gym.Env):
             for last, current in zip(last_counts_overheat, current_count_overheat)
         ]
         # overcool
+        current_over_cool = sensor_reading - self.target_temperature
         current_count_overcool = []
-        current_count_overcool.append(numpy.sum(current_over_heat_reading < 0))
-        current_count_overcool.append(numpy.sum(current_over_heat_reading < -2))
-        current_count_overcool.append(numpy.sum(current_over_heat_reading < -4))
-        current_count_overcool.append(numpy.sum(current_over_heat_reading < -6))
+        current_count_overcool.append(numpy.sum(current_over_cool < 0))
+        current_count_overcool.append(numpy.sum(current_over_cool < -2))
+        current_count_overcool.append(numpy.sum(current_over_cool < -4))
+        current_count_overcool.append(numpy.sum(current_over_cool < -6))
         last_counts_overcool = [
                 p * (current_step - 1) * self.n_sensor 
                 for p in self.over_cool_percentage
@@ -629,19 +634,20 @@ class HVACEnv(gym.Env):
         # print
         if (self.verbose):
             print(f"Step {current_step}:")
+            print(f"  Avg Reward: {self.avg_reward:.4f} per step")
             print(f"  Avg Cooler Power: {self.avg_cooler_power_per_step:.4f} per step")
             
             print("  Overheat Statistics:")
-            print(f"    current >0°C: {current_count_overheat[0]} sensors, total ({self.over_heat_percentage[0]*100:.2f}%)")
-            print(f"    current >2°C: {current_count_overheat[1]} sensors, total ({self.over_heat_percentage[1]*100:.2f}%)")
-            print(f"    current >4°C: {current_count_overheat[2]} sensors, total ({self.over_heat_percentage[2]*100:.2f}%)")
-            print(f"    current >6°C: {current_count_overheat[3]} sensors, total ({self.over_heat_percentage[3]*100:.2f}%)")
+            print(f"    current > 0°C: {current_count_overheat[0]} sensors, total ({self.over_heat_percentage[0]*100:.2f}%)")
+            print(f"    current > 2°C: {current_count_overheat[1]} sensors, total ({self.over_heat_percentage[1]*100:.2f}%)")
+            print(f"    current > 4°C: {current_count_overheat[2]} sensors, total ({self.over_heat_percentage[2]*100:.2f}%)")
+            print(f"    current > 6°C: {current_count_overheat[3]} sensors, total ({self.over_heat_percentage[3]*100:.2f}%)")
             
             print("  Overcool Statistics:")
-            print(f"    current >0°C: {current_count_overcool[0]} sensors, total ({self.over_cool_percentage[0]*100:.2f}%)")
-            print(f"    current >2°C: {current_count_overcool[1]} sensors, total ({self.over_cool_percentage[1]*100:.2f}%)")
-            print(f"    current >4°C: {current_count_overcool[2]} sensors, total ({self.over_cool_percentage[2]*100:.2f}%)")
-            print(f"    current >6°C: {current_count_overcool[3]} sensors, total ({self.over_cool_percentage[3]*100:.2f}%)")
+            print(f"    current < 0°C: {current_count_overcool[0]} sensors, total ({self.over_cool_percentage[0]*100:.2f}%)")
+            print(f"    current < -2°C: {current_count_overcool[1]} sensors, total ({self.over_cool_percentage[1]*100:.2f}%)")
+            print(f"    current < -4°C: {current_count_overcool[2]} sensors, total ({self.over_cool_percentage[2]*100:.2f}%)")
+            print(f"    current < -6°C: {current_count_overcool[3]} sensors, total ({self.over_cool_percentage[3]*100:.2f}%)")
 
             if self.include_switch_in_observation and not self.no_switch_action:
                 print("  Switch Statistics:")
@@ -695,7 +701,7 @@ class HVACEnvDiscreteAction(HVACEnv):
         normalized_obs, reward, terminated, truncated, info = super().step(discretized_action)
 
         if self.verbose:
-            self.stat(normalized_obs, terminated, info)
+            self.stat(normalized_obs, terminated, info, reward)
 
         return normalized_obs, reward, terminated, truncated, info
     
@@ -753,7 +759,7 @@ class HVACEnvDiffAction(HVACEnv):
         normalized_obs, reward, terminated, truncated, info = super().step(discretized_action)
 
         if self.verbose:
-            self.stat(normalized_obs, terminated, info)
+            self.stat(normalized_obs, terminated, info, reward)
 
         return normalized_obs, reward, terminated, truncated, info
     

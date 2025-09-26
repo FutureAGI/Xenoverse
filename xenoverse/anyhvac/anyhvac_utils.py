@@ -234,6 +234,7 @@ class Cooler(BaseVentilator):
     def temperature_control(self, switch, value, t, building_state=None, ambient_state=None):
         # calculate the return temperature as the target for control
         env_temp = self.calc_return_temperature(building_state, t)
+        self.return_temperature = env_temp
         if switch == 0:
             return super().step(0, 0, t, building_state=building_state, ambient_state=ambient_state)
 

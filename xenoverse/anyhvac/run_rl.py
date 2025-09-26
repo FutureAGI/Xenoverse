@@ -9,9 +9,9 @@ if __name__ == "__main__":
     import gymnasium as gym
 
     import pickle 
-    TASK_CONFIG_PATH = "./task_file/hvac_task_config_0903_discrete_action.pkl"
-    load_path = "./models/0828/temp/1/sac_random_start_no_normal/sac_stage2.zip"
-    save_path = "./models/0901/temp/1/rppo_stage1.zip"
+    TASK_CONFIG_PATH = "./task_file/hvac_task_config_0906.pkl"
+    load_path = "./output/0906/0915/mode_2/diff_sac/sac_reward_3_0_5_stage1.zip"
+    save_path = "./output/0906/0915/mode_2/diff_sac/sac_reward_3_0_5_stage2.zip"
     visual = False
 
 
@@ -35,7 +35,7 @@ if __name__ == "__main__":
             return env
     else:
         def make_env():
-            env = HVACEnvDiffAction()
+            env = HVACEnvDiffAction(reward_mode=2)
             env.set_task(task)
             # env.set_return_normilized_obs(True)
             env.set_random_start_t(True)
@@ -44,20 +44,20 @@ if __name__ == "__main__":
 
     trainer = HVACRLTrainer(
         env_maker=make_env,
-        n_envs=64,  # 并行环境数
+        n_envs=16,  # 并行环境数
         vec_env_type="subproc",  # 向量环境类型
-        algorithm="rppo",  # 可选 "ppo" 或 "sac"
+        algorithm="sac",  # 可选 "ppo" 或 "sac"
         stage_steps=100,  # 每5000步统计一次平均奖励
         vec_env_args={
             "start_method": "spawn"
         },
         verbose = 0,
-        device="cuda"  # 使用GPU加速
+        device="cpu"  # 使用GPU加速
     )
 
     # 训练模型
     # trainer.load_model(load_path)
-    trainer.train(total_steps=1000000)
+    trainer.train(total_steps=200000)
     
     # 保存模型
 
