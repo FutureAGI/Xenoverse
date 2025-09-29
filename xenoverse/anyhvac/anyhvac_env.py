@@ -528,8 +528,6 @@ class HVACEnv(gym.Env):
     def sample_action(self, mode="random"):
         if mode == "random":
             return self._random_action()
-        elif mode == "pid":
-            return self._pid_action()
         elif mode == "max":
             n_coolers = len(self.coolers)
             sampled_action = np.concatenate((
@@ -544,37 +542,6 @@ class HVACEnv(gym.Env):
         if isinstance(self.action_space, Dict):
             return self.action_space.sample()
 
-    def _pid_action(self, pid_params=None):
-
-        action = np.zeros(self.action_space.shape, dtype=self.action_space.dtype)
-        n_coolers = len(self.coolers)
-        # Set switch part (first n_coolers elements) - Treat as continuous 1.0 for "ON"
-        action[:n_coolers] = 1.0
-        # Set value part (next n_coolers elements)
-        target_temp = self.target_temperature # Assuming single target temp for simplicity here
-        lb = self.lower_bound
-        ub = self.upper_bound
-
-
-        if isinstance(self.target_temperature, (np.ndarray, list)):
-            target_temp = np.mean(self.target_temperature)
-            target_temp = int(24)
-        else:
-            target_temp = self.target_temperature
-            target_temp = int(24)
-        # Calculate desired value based on control type (assuming Temperature control for PID example)
-        if self.control_type.lower() == 'temperature':
-
-            a = (target_temp - lb) / (ub - lb)
-            a = np.clip(a, 0.0, 1.0) # Clip to valid 0-1 range
-
-        elif self.control_type.lower() == 'power':
-            a = 0.5 # Placeholder for power control PID
-        else:
-            a = 0.0 # Default if control type unknown
-        action[n_coolers:] = a
-
-        return action
     def stat(self, normalized_obs, terminated, info, reward):
         # power stat
         current_step = self.episode_step

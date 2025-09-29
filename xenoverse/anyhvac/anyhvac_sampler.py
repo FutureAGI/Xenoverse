@@ -34,7 +34,7 @@ def HVACTaskSampler(control_type='Temperature',
     eps = rnd.uniform(0.0, 1.0)
 
         
-    if(eps < 2.0):
+    if(eps < 0.2):
         t_ambient = rnd.uniform(16, 28) # ambient temperature
     elif(eps < 0.9):
         t_ambient = rnd.uniform(28, 35)
