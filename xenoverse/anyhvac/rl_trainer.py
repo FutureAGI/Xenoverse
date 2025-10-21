@@ -14,17 +14,17 @@ from typing import Union, Type
 class HVACRLTrainer:
     def __init__(
         self,
-        env_maker,  # env maker
-        algorithm: str = "ppo",  # 算法类型
-        policy_type: str = "MlpLstmPolicy",  # 策略网络类型 PPO: MlpPolicy 
-        stage_steps: int = 10000,  # 每阶段统计步数
-        n_envs: int = 4,                   # 并行环境数
-        vec_env_type: str = "dummy",     # 向量环境类型  dummy  subproc
-        vec_env_args: dict = None,         # 向量环境参数
+        env_maker,  
+        algorithm: str = "ppo", 
+        stage_steps: int = 10000,
+        n_envs: int = 4,
+        vec_env_type: str = "dummy",
+        vec_env_args: dict = None,
         verbose: int = 1,
-        device: str = "auto"
+        device: str = "auto",
+        log_path: str = None
     ):
-        # 环境包装
+        # env wrapper
         self.n_envs = n_envs
         self.env = self._make_vec_env(
             env_maker=env_maker,  
@@ -35,16 +35,16 @@ class HVACRLTrainer:
         self.stage_steps = stage_steps
         self.stats = {"stage_rewards": []}
         
-        # 初始化模型
+        # init model
         policy_map = {
             "ppo": PPO,
             "rppo": RecurrentPPO,
             "sac": SAC
         }
         policy_type_map = {
-            "ppo": "MlpPolicy",
-            "rppo": "MlpLstmPolicy",
-            "sac": "MlpPolicy"
+            "ppo": "MultiInputPolicy",
+            "rppo": "MultiInputLstmPolicy",
+            "sac": "MultiInputPolicy"
         }
         
         if self.algorithm not in policy_map:
@@ -53,14 +53,15 @@ class HVACRLTrainer:
         self.model_class = policy_map[self.algorithm]
         self.model = self._init_model(policy_type_map[self.algorithm], verbose, device)
         
-        # 训练回调
+        # training callback
         self.logger_callback = TrainingLoggerCallback(
             check_freq=stage_steps,
-            verbose=verbose
+            verbose=verbose,
+            log_path=log_path
         )
 
     def _make_vec_env(self, env_maker, vec_type: str, vec_args: dict):
-        """ 创建兼容类型检查的向量环境 """
+
         from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv
         from stable_baselines3.common.monitor import Monitor
         
@@ -86,7 +87,7 @@ class HVACRLTrainer:
         )
     
     def _init_model(self, policy_type: str, verbose: int, device: str):
-        """ 初始化强化学习模型 """
+        """ init RL model """
         common_params = {
             "policy": policy_type,
             "env": self.env,
@@ -130,7 +131,6 @@ class HVACRLTrainer:
             )
 
     def train(self, total_steps: int = 100000):
-        """ 执行训练流程 """
         self.model.learn(
             total_timesteps=total_steps,
             callback=self.logger_callback,
@@ -139,7 +139,6 @@ class HVACRLTrainer:
         self._update_stats()
 
     def evaluate(self, n_episodes: int = 10):
-        """ 策略评估 """
         total_rewards = []
         for _ in range(n_episodes):
             obs = self.env.reset()
@@ -153,26 +152,22 @@ class HVACRLTrainer:
         return np.mean(total_rewards)
 
     def save_model(self, path: str):
-        """ 保存模型和配置 """
         os.makedirs(os.path.dirname(path), exist_ok=True)
         self.model.save(path)
         print(f"Model saved to {path}")
 
     def load_model(self, path: str):
-        """ 加载已有模型 """
         self.model = self.model_class.load(path, env=self.env)
         print(f"Model loaded from {path}")
 
     def _update_stats(self):
-        """ 更新训练统计数据 """
         if self.logger_callback.stage_rewards:
             self.stats["stage_rewards"].extend(
                 self.logger_callback.stage_rewards
             )
 
 class TrainingLoggerCallback(BaseCallback):
-    """ 自定义训练日志回调 """
-    def __init__(self, check_freq: int, verbose=1):
+    def __init__(self, check_freq: int, verbose=1, log_path=None):
         super().__init__(verbose)
         self.check_freq = check_freq
         self.stage_rewards = []
@@ -180,33 +175,27 @@ class TrainingLoggerCallback(BaseCallback):
         self.current_info = []
         self.current_overheat = []
         self.current_over_tolerace = []
+        self.log_path = log_path
 
     def _on_step(self) -> bool:
-        """ 记录每个步骤的奖励和信息统计 """
-
-        # 原始数据记录
         current_obs = self.model.env.get_attr("current_obs")[0]
         current_action = self.model.env.get_attr("current_action")[0]
         self.current_stage.append(self.locals["rewards"][0])
         info = self.locals["infos"][0]
-        self.current_info.append(info)  # 保存完整的info字典
+        self.current_info.append(info)
         self.current_overheat.append(info["over_heat"])
         self.current_over_tolerace.append(info["over_tolerace"])
 
-        
-        # 动态初始化统计字段
         if not hasattr(self, 'info_sums'):
             self.info_sums = {key: 0.0 for key in info.keys()}
             self.info_counts = {key: 0 for key in info.keys()}
-            
-        # 累积统计量
+
         for key, value in info.items():
             if isinstance(value, numbers.Real):
                 self.info_sums[key] += value
                 self.info_counts[key] += 1
         
         if self.n_calls % self.check_freq == 0:
-            # 计算主奖励均值
             mean_reward = np.mean(self.current_stage)
             cool_power = round(np.sum(info.get("cool_power", 0)),4)
             heat_power = round(np.sum(info.get("heat_power", 0)),4)
@@ -215,24 +204,24 @@ class TrainingLoggerCallback(BaseCallback):
             self.current_overheat.clear()
             self.current_over_tolerace.clear()
 
-
-            # print("self.current_stage",self.current_stage )
             info_total = f"energy_cost: {round(info.get('energy_cost', 0), 4)}, " \
                          f"target_cost: {round(info.get('target_cost', 0), 4)}, " \
                          f"switch_cost: {round(info.get('switch_cost', 0), 4)}, " \
                          f"action_cost: {round(info.get('action_cost', 0), 4)}, " \
                          f"cool_power: {cool_power}, heat_power: {heat_power}"
-            # 计算各信息字段均值
-            # info_means = {
-            #     key: self.info_sums[key] / self.info_counts[key] 
-            #     for key in self.info_sums
-            # }
 
-            # 格式化输出
-            print(f"Step {self.model.num_timesteps} | over_heat:{over_heat} | over_tolerace:{over_tolerace} | Reward: {mean_reward:.2f} | {info_total}", flush=True)
-            print("current_obs: ", current_obs)
-            # print("current_action: ", current_action)
-            # 重置统计量
+            if self.log_path is None:
+                print(f"Step {self.model.num_timesteps} | over_heat:{over_heat} | over_tolerace:{over_tolerace} | Reward: {mean_reward:.2f} | {info_total}", flush=True)
+                print("current_obs: ", current_obs)
+            else:
+                log_line1 = f"Step {self.model.num_timesteps} | over_heat:{over_heat} | over_tolerace:{over_tolerace} | Reward: {mean_reward:.2f} | {info_total}"
+                log_line2 = f"current_obs: {current_obs}"
+                with open(self.log_path, 'a') as f:
+                    f.write(log_line1 + '\n')
+                    f.write(log_line2 + '\n')
+                    f.flush()
+
+
             self.current_stage = []
             self.info_sums = {k:0.0 for k in self.info_sums}
             self.info_counts = {k:0 for k in self.info_counts}
@@ -246,22 +235,14 @@ class HVACRLTester:
         algorithm: str = "ppo",
         device: str = "auto"
     ):
-        """
-        参数:
-            model_path: 模型文件路径
-            algorithm: 算法类型 (ppo, rppo, sac)
-            device: 运行设备 (cpu, cuda, auto)
-        """
         self.algorithm = algorithm.lower()
         self.model_path = model_path
         self.device = device
         
-        # 直接加载模型，不需要环境
         self.model = self._load_model()
     
     def _load_model(self):
-        """加载训练好的模型"""
-        # 算法到模型类的映射
+
         model_classes = {
             "ppo": PPO,
             "rppo": RecurrentPPO,
@@ -269,42 +250,53 @@ class HVACRLTester:
         }
         
         if self.algorithm not in model_classes:
-            raise ValueError(f"不支持的算法类型: {self.algorithm}")
+            raise ValueError(f"Unsupported model: {self.algorithm}")
         
         model_class = model_classes[self.algorithm]
         
-        # 加载模型，不传入环境
         model = model_class.load(
             self.model_path,
             device=self.device
         )
         
-        print(f"成功加载 {self.algorithm.upper()} 模型: {self.model_path}")
+        print(f"Load {self.algorithm.upper()} model: {self.model_path}")
         return model
     
     def predict(self, obs: np.ndarray, deterministic: bool = True) -> np.ndarray:
         """
-        根据观测值预测动作
+        Predict actions based on observed values
         
-        参数:
-            obs: 观测值数组 (一维)
-            deterministic: 是否使用确定性策略
+        Param:
+            obs: Observation value array (one-dimensional)
+            deterministic: Whether to use a deterministic strategy
         
-        返回:
-            动作数组 (一维)
+        Return:
+            Action array (one-dimensional)
         """
-        # 确保输入是正确形状的数组
-        if not isinstance(obs, np.ndarray):
-            obs = np.array(obs, dtype=np.float32)
+        # if not isinstance(obs, np.ndarray):
+        #     obs = np.array(obs, dtype=np.float32)
         
-        # 添加批次维度 (1, *obs_shape)
-        obs = obs[np.newaxis, :]
+        # obs = obs[np.newaxis, :]
         
-        # 模型预测
-        action, _ = self.model.predict(obs, deterministic=deterministic)
+        if self.algorithm == "rppo":
+            if self._episode_start:
+                episode_start = np.array([True])
+                self._episode_start = False
+            else:
+                episode_start = np.array([False])
+            action, self._last_lstm_states = self.model.predict(obs, 
+                                                                state=self._last_lstm_states, 
+                                                                episode_start=episode_start, 
+                                                                deterministic=deterministic)
+        else:
+            action, _ = self.model.predict(obs, deterministic=deterministic)
         
-        # 返回动作 (移除批次维度)
-        return action[0]
+        return action
+    
+    def reset(self):
+        if self.algorithm == "rppo":
+            self._episode_start = True
+            self._last_lstm_states = None
 
     
 

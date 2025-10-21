@@ -11,11 +11,12 @@ if __name__ == "__main__":
     import pickle 
     from rl_trainer import HVACRLTester
 
-    env = HVACEnvDiffAction(reward_mode = 2, verbose=True)
-    TASK_CONFIG_PATH = "./task_file/hvac_task_config_0906.pkl"
-    RL_MODEL_PATH = "./output/0906/0915/mode_2/diff_sac/sac_reward_3_0_5_stage2.zip"
-    output_dir = "./output/0906/0915/mode_2/diff_sac/stage2_output/"
-    model = HVACRLTester(RL_MODEL_PATH, "sac", "cpu")
+    env = HVACEnvDiffAction(reward_mode = 1, verbose=True)
+    TASK_CONFIG_PATH = "./task_file/1011/hvac_task_1185.pkl"
+    RL_MODEL_PATH = "./output/1011/hvac_task_1185/reward_mode1/rppo_reward_mode_1.zip"
+    output_dir = "./output/1011/hvac_task_1185/reward_mode1/rppo_dict_output/test2/"
+    model = HVACRLTester(RL_MODEL_PATH, "rppo", "cpu")
+    model.reset()
     try:
         with open(TASK_CONFIG_PATH, "rb") as f:
             task = pickle.load(f)
@@ -49,13 +50,15 @@ if __name__ == "__main__":
     cool_power_count = 0
     while steps < max_steps:
         # Max coolers power
-        action = env.sample_action(mode="max")
+        # action = env.sample_action(mode="max")
 
         # RL
-        # action = model.predict(obs)
+        action = model.predict(obs, deterministic=False)
+        # print("_last_lstm_states: ", model._last_lstm_states)
+        
         
         # pid
-        # action = 1 - pid.policy(obs[:n_sensors])[n_coolers:]
+        # action = 1 - pid.policy(obs["sensor_readings"])[n_coolers:]
         
         obs, reward, terminated, truncated, info = env.step(action)
         env_action = deepcopy(env.last_action)
@@ -70,7 +73,7 @@ if __name__ == "__main__":
         values.append(value)
 
         # print("t: ",env.t)
-        print(obs[:n_sensors])
+        print(obs["sensor_readings"])
         if 'cool_power' in info:
             cool_power_sum += numpy.sum(info['cool_power'])
             cool_power_count += 1
