@@ -20,10 +20,6 @@ class HVACSolverGTPID:
                 raise AttributeError(f"Missing required attribute: {attr}")
             setattr(self, attr, getattr(env, attr))
         
-        
-
-        
-        
         self.corr_sensor_cooler = []
         for sensor in self.sensors:
             nx, ny = sensor.nloc
