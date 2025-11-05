@@ -16,7 +16,7 @@ Xenoverse is a collection of extremely diverse worlds by procedural generation b
 
 - [MazeWorld](xenoverse/mazeworld): Procedurally generated immersed 3D mazes with diverse maze structures.
 
-- [MazeControl](xenoverse/metcontrol): Randomized environments for classic control and locomotions.
+- [MetaControl](xenoverse/metacontrol): Randomized environments for classic control and locomotions.
 
 
 # Installation
