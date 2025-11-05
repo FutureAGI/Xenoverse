@@ -34,10 +34,22 @@ Related works
   journal={arXiv preprint arXiv:2405.17234},
   year={2024}
 }
-@article{wang2025towards,
+@inproceedings{
+  wang2025towards,
   title={Towards Large-Scale In-Context Reinforcement Learning by Meta-Training in Randomized Worlds},
-  author={Wang, Fan and Shao, Pengtao and Zhang, Yiming and Yu, Bo and Liu, Shaoshan and Ding, Ning and Cao, Yang and Kang, Yu and Wang, Haifeng},
-  journal={arXiv preprint arXiv:2502.02869},
-  year={2025}
+  author={Fan Wang and Pengtao Shao and Yiming Zhang and Bo Yu and Shaoshan Liu and Ning Ding and Yang Cao and Yu Kang and Haifeng Wang},
+  booktitle={The Thirty-ninth Annual Conference on Neural Information Processing Systems},
+  year={2025},
+  url={https://openreview.net/forum?id=b6ASJBXtgP}
+}
+@article{fan2025putting,
+  title={Putting the smarts into robot bodies},
+  author={Fan, Wang and Liu, Shaoshan},
+  journal={Communications of the ACM},
+  volume={68},
+  number={3},
+  pages={6--8},
+  year={2025},
+  publisher={ACM New York, NY, USA}
 }
 ```
