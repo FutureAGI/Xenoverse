@@ -13,8 +13,15 @@ class RandomHumanoidEnv(HumanoidEnv):
     Randomly sampled humanoid environment from mujoco-py
     """
     def __init__(self, seed=None, **kwargs):
-        super().__init__(**kwargs)
+        self.kwargs = kwargs
+        super().__init__(**self.kwargs)
         self.seed(seed)
 
+    def seed(self, seed=None):
+        if(seed is None):
+            pseudo_random_seed(0)
+        else:
+            pseudo_random_seed(seed)
+
     def set_task(self, task):
-        super().__init__(xml_file=task)
+        super().__init__(xml_file=task, **self.kwargs)

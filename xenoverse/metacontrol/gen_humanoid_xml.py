@@ -11,9 +11,9 @@ def default_rng(range_tuple, default=0):
     else:
         return default
 
-def sample_joint_attributes(amarture_range, damping_range, stiffness_range, limit_lower, limit_higher=None, joint_type="hinge"):
+def sample_joint_attributes(armature_range, damping_range, stiffness_range, limit_lower, limit_higher=None, joint_type="hinge"):
     """Sample joint attributes within given ranges"""
-    armature = random.uniform(*amarture_range)
+    armature = random.uniform(*armature_range)
     damping = random.uniform(*damping_range)
     stiffness = random.uniform(*stiffness_range)
 
@@ -25,7 +25,7 @@ def sample_joint_attributes(amarture_range, damping_range, stiffness_range, limi
 
     if(range_lower > range_higher):
         range_lower, range_higher = range_higher, range_lower
-    return {"amarture": armature, 
+    return {"armature": armature, 
             "damping": damping, 
             "stiffness": stiffness, 
             "type": joint_type,
@@ -73,6 +73,12 @@ def perturb(kw, sparsity=0.10, scale=0.33, asymmetric=True):
         else:
             new_kw[k] = v
     return new_kw
+
+def strval(x):
+    if(isinstance(x, float)):
+        return str(round(x, 6))
+    else:
+        return str(x)
         
 def ET_sub(parent_element, tag, attrib={}, text=None):
     """Helper function to create a subelement with text and attributes"""
@@ -81,9 +87,9 @@ def ET_sub(parent_element, tag, attrib={}, text=None):
         if(v is None):
             new_attrib[k] = ""
         elif(isinstance(v, (list, tuple))):
-            new_attrib[k] = " ".join(map(str, v))
+            new_attrib[k] = " ".join(map(strval, v))
         else:
-            new_attrib[k] = str(v)
+            new_attrib[k] = strval(v)
     element = ET.SubElement(parent_element, tag, new_attrib)
     if text is not None:
         element.text = text
@@ -95,9 +101,9 @@ def ET_set(element, attrib={}):
         if(v is None):
             element.set(k, "")
         elif(isinstance(v, (list, tuple))):
-            element.set(k, " ".join(map(str, v)))
+            element.set(k, " ".join(map(strval, v)))
         else:
-            element.set(k, str(v))
+            element.set(k, strval(v))
     return element
 
 def sample_all_joint_attributes(asymmetric=True):
@@ -191,14 +197,14 @@ def sample_all_limb_sizes():
 def prepare_assets(root):
     ET.SubElement(root, "compiler", {"angle": "degree", "inertiafromgeom": "true"})
     default = ET.SubElement(root, "default")
-    ET.SubElement(default, "joint", {"amarture":"1", "damping":"1", "limited":"true"})
+    ET.SubElement(default, "joint", {"armature":"1", "damping":"1", "limited":"true"})
     ET.SubElement(default, "geom", {"conaffinity":"1", "condim":"1", "contype":"1", "margin":"0.001", "material":"geom", "rgba":"0.8 0.6 .4 1"})
     ET.SubElement(default, "motor", {"ctrllimited":"true", "ctrlrange":"-.4 .4"})
 
     ET.SubElement(root, "option", {"integrator":"RK4", "iterations":"50", "solver":"PGS", "timestep":"0.003"})
     size = ET.SubElement(root, "size", {"nkey":"5", "nuser_geom":"1"})
     visual = ET.SubElement(root, "visual")
-    map = ET.SubElement(visual, "map", {"fogend":"5", "fogstart":"3", "fogcolor":"1 1 1"})
+    map = ET.SubElement(visual, "map", {"fogend":"5", "fogstart":"3"})
     ET.SubElement(root, "asset")
     asset = root.find("./asset")
     ET.SubElement(asset, "texture", {"builtin":"gradient", "height":"100", "rgb1":".4 .5 .6", "rgb2":"0 0 0", "type":"skybox", "width":"100"})
@@ -430,7 +436,6 @@ def create_random_humanoid():
                     geom_len=body_attrs["len_lower_arm"],
                     geom_size=body_attrs["size_lower_arm"],
                     geom_pos=(body_attrs["la_origin"], -body_attrs["la_origin"] * sign, body_attrs["la_origin"]),
-                    directions=(1, -sign, 1),
                     joint_names = [f"{side}_elbow"],
                     joint_attrs = joints_attrs,
                     joint_axes=[(0, -1, -sign)],
@@ -446,16 +451,12 @@ def create_random_humanoid():
     # Add tendon elements for muscles
     tendon = ET.SubElement(root, "tendon")
     factor = random.uniform(0.0, 1.0)
-    ET_sub(tendon, "left_hipknee", {
-        "type": "fixed",
-        "joint": "left_hip_y left_knee",
-        "coef": (-factor, factor)
-    })
-    ET_sub(tendon, "right_hipknee", {
-        "type": "fixed",
-        "joint": "right_hip_y right_knee",
-        "coef": (-factor, factor)
-    })
+    lhk = ET_sub(tendon, "fixed", {"name": "left_hipknee"})
+    rhk = ET_sub(tendon, "fixed", {"name": "right_hipknee"})
+    ET_sub(lhk, "joint", {"coef": -factor, "joint": "left_hip_y"})
+    ET_sub(lhk, "joint", {"coef": factor, "joint": "left_knee"})
+    ET_sub(rhk, "joint", {"coef": -factor, "joint": "right_hip_y"})
+    ET_sub(rhk, "joint", {"coef": factor, "joint": "right_knee"})
 
     # Add actuator elements for muscles
     actuator = ET.SubElement(root, "actuator")
