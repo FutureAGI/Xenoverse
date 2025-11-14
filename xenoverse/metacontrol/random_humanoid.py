@@ -8,7 +8,7 @@ from numba import njit
 from gymnasium import spaces
 from xenoverse.utils import pseudo_random_seed, versatile_sample, generate_secure_strings
 from gymnasium.envs.mujoco.humanoid_v5 import HumanoidEnv
-from humanoid_xml_sampler import humanoid_xml_sampler
+from xenoverse.metacontrol.humanoid_xml_sampler import humanoid_xml_sampler
 
 def sample_humanoid(root_path=None, noise_scale=1.0):
     # Sample a random humanoid task
