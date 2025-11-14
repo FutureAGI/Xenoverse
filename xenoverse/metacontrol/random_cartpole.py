@@ -36,6 +36,9 @@ class RandomCartPoleEnv(CartPoleEnv):
         """
         self.frameskip = kwargs.get("frameskip", 5)
         self.reset_bounds_scale = kwargs.get("reset_bounds_scale", numpy.array([0.45, 0.90, 0.13, 1.0]))
+        if(isinstance(self.reset_bounds_scale, list)):
+            assert len(self.reset_bounds_scale) == 4, "reset_bounds_scale should be a list of 4 elements"
+            self.reset_bounds_scale = numpy.array(self.reset_bounds_scale)
         kwargs.pop("frameskip", None)
         kwargs.pop("reset_bounds_scale", None)
         super().__init__(*args, **kwargs)
@@ -57,7 +60,6 @@ class RandomCartPoleEnv(CartPoleEnv):
                 break
         return obs, total_reward, terminated, truncated, info
 
-
     def reset(
         self,
         *,
@@ -65,9 +67,9 @@ class RandomCartPoleEnv(CartPoleEnv):
         options: dict | None = None):
         # Note that if you use custom reset bounds, it may lead to out-of-bound
         # state/observations.
-        self.state = self.np_random.uniform(low=-1, high=1, size=(4,)) * self.reset_bounds_scale
+        self.state = random.uniform(low=-1, high=1, size=(4,)) * self.reset_bounds_scale
         self.steps_beyond_terminated = None
 
         if self.render_mode == "human":
-            self.render()
-        return np.array(self.state, dtype=np.float32), {}
+            super().render()
+        return numpy.array(self.state, dtype=numpy.float32), {}
