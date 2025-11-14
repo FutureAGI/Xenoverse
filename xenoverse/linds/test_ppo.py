@@ -1,22 +1,22 @@
 if __name__=="__main__":
-    import gym
+    import gymnasium as gym
     import numpy
     import argparse
-    from xenoverse.anymdpv2 import AnyMDPv2TaskSampler
+    from xenoverse.linds import LinearDSSampler
 
     from stable_baselines3 import PPO, SAC
     from sb3_contrib import RecurrentPPO
     from stable_baselines3.common.env_util import make_vec_env
     from stable_baselines3.common.evaluation import evaluate_policy
 
-    task = AnyMDPv2TaskSampler(state_dim=64, 
+    task = LinearDSSampler(state_dim=16,
                              action_dim=16)
 
-    env = gym.make("anymdp-v2-visualizer") 
+    env = gym.make("linear-dynamics-v0-visualizer") 
     env.set_task(task, verbose=True, reward_shaping=True)
 
     args = argparse.ArgumentParser()
-    args.add_argument("--max_step", type=int, default=80000)
+    args.add_argument("--max_step", type=int, default=200000)
     args.add_argument("--lr", type=float, default=3e-4)
     args.add_argument("--run", choices=["mlp", "lstm", "both"], default="both")
     args = args.parse_args()

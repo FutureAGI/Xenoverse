@@ -2,11 +2,11 @@ import numpy
 import matplotlib.pyplot as plt
 from sklearn.manifold import TSNE
 from sklearn.datasets import load_digits
-from .anymdp_env import AnyMDPEnv
+from .linds_env import LinearDSEnv
 from xenoverse.utils import pseudo_random_seed
 from restools.plotting.plot_2D import savitzky_golay
 
-class AnyMDPv2Visualizer(AnyMDPEnv):
+class LinearDSVisualizer(LinearDSEnv):
     
     def set_task(self, task, **kwargs):
         # Set task will automatically reset all records
@@ -19,11 +19,11 @@ class AnyMDPv2Visualizer(AnyMDPEnv):
     def color_spec(self, i):
         return [self.color_spec_type[i][idx] for idx in self.colors]
 
-    def reset(self):
+    def reset(self, *args, **kwargs):
         obs, info = super().reset()
         self.observation_records.append(numpy.copy(obs))
         self.action_records.append(numpy.zeros((self.action_dim,)))
-        self.inner_state_records.append(numpy.copy(self.inner_state))
+        self.inner_state_records.append(numpy.copy(self._state))
         self.reward_records.append(0.0)
 
         return obs, info
@@ -32,7 +32,7 @@ class AnyMDPv2Visualizer(AnyMDPEnv):
         obs, reward, terminated, truncated, info = super().step(action)
 
         self.observation_records.append(numpy.copy(obs))
-        self.inner_state_records.append(numpy.copy(self.inner_state))
+        self.inner_state_records.append(numpy.copy(self._state))
         self.action_records.append(numpy.copy(action))
         self.reward_records.append(reward)
         return obs, reward, terminated, truncated, info
@@ -43,7 +43,7 @@ class AnyMDPv2Visualizer(AnyMDPEnv):
         if(filename is not None):
             file_name = file_name
         else:
-            file_name = "./anymdp_visualizer_output.pdf"
+            file_name = "./linds_visualizer_output.pdf"
         obs_arr = numpy.array(self.observation_records, dtype="float32")
         act_arr = numpy.array(self.action_records, dtype="float32")
 

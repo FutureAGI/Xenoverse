@@ -13,21 +13,21 @@
 # limitations under the License.
 
 from gymnasium.envs.registration import register
-from xenoverse.anymdpv2.anymdp_env import AnyMDPEnv
-from xenoverse.anymdpv2.task_sampler import AnyMDPv2TaskSampler
-from xenoverse.anymdpv2.visualizer import AnyMDPv2Visualizer
+from xenoverse.linds.linds_env import LinearDSEnv
+from xenoverse.linds.task_sampler import LinearDSSampler
+from xenoverse.linds.visualizer import LinearDSVisualizer
 
 register(
-    id='anymdp-v2',
-    entry_point='xenoverse.anymdpv2:AnyMDPEnv',
+    id='linear-dynamics-v0',
+    entry_point='xenoverse.linds:LinearDSEnv',
     order_enforce=False,
     disable_env_checker=True,
     kwargs={"max_steps": 5000},
 )
 
 register(
-    id='anymdp-v2-visualizer',
-    entry_point='xenoverse.anymdpv2:AnyMDPv2Visualizer',
+    id='linear-dynamics-v0-visualizer',
+    entry_point='xenoverse.linds:LinearDSVisualizer',
     order_enforce=False,
     disable_env_checker=True,
     kwargs={"max_steps": 5000},

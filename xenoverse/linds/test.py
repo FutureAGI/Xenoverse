@@ -1,15 +1,15 @@
 if __name__=="__main__":
     import gymnasium as gym
     import numpy
-    from xenoverse.anymdpv2 import AnyMDPv2TaskSampler
+    from xenoverse.linds import LinearDSSampler
 
-    task = AnyMDPv2TaskSampler(state_dim=128, 
+    task = LinearDSSampler(state_dim=128, 
                              action_dim=16)
     max_steps = 5000
     prt_freq = 100
 
     # Test Random Policy
-    env = gym.make("anymdp-v2-visualizer")
+    env = gym.make("linear-dynamics-v0-visualizer")
     env.set_task(task)
     state = env.reset()
     acc_reward = 0
