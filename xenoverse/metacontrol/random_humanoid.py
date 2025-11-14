@@ -53,7 +53,6 @@ class RandomHumanoidEnv(HumanoidEnv):
         root = tree.getroot()
 
         for body in root.findall('.//body'):
-            print(body.get('name'))
             if(body.get('name') == 'torso'):
                 size = body.get('pos', '0 0 0').split()
                 torso_height = float(size[2])
