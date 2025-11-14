@@ -1,6 +1,8 @@
 import numpy
 from numba import njit
 from numpy import random
+import secrets
+import string
 
 @njit(cache=True)
 def conv2d_numpy(input_data:numpy.ndarray, 
@@ -49,3 +51,8 @@ def versatile_sample(setting, default_range, default_value):
         return random.uniform(default_range[0], default_range[1])
     else:
         return default_value
+    
+def generate_secure_strings(count, length=16):
+    alphabet = string.ascii_letters + string.digits  # 62个字符
+    return [''.join(secrets.choice(alphabet) for _ in range(length)) 
+            for _ in range(count)]
