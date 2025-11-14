@@ -1,6 +1,7 @@
 import numpy
 import gymnasium as gym
 import pygame
+import xml.etree.ElementTree as ET
 from numpy import random
 from numba import njit
 from gymnasium import spaces
@@ -24,4 +25,17 @@ class RandomHumanoidEnv(HumanoidEnv):
             pseudo_random_seed(seed)
 
     def set_task(self, task):
-        super().__init__(xml_file=task, **self.kwargs)
+        tree = ET.parse(task)
+        root = tree.getroot()
+
+        for body in root.findall('.//body'):
+            print(body.get('name'))
+            if(body.get('name') == 'torso'):
+                size = body.get('pos', '0 0 0').split()
+                torso_height = float(size[2])
+        max_height = torso_height * 2
+        min_height = torso_height / 2
+
+        super().__init__(xml_file=task, 
+                        healthy_z_range = (min_height, max_height),
+                         **self.kwargs)

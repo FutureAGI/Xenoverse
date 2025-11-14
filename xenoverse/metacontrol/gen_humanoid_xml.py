@@ -133,61 +133,63 @@ def sample_all_joint_attributes(asymmetric=True):
 """
 Sample all limb sizes
 """
-def sample_all_limb_sizes():
+def sample_all_limb_sizes(noise_scale=1.0):
     """Sample all limb sizes for a humanoid"""
     sizes = {}
-    sizes["size_head"] = random.uniform(0.08, 0.16)
-    sizes["size_torso1"] = random.uniform(0.08, 0.16)
-    sizes["len_torso1"] = random.uniform(0.15, 0.30)
-    sizes["size_uwaist"] = random.uniform(0.08, 0.16)
-    sizes["len_uwaist"] = random.uniform(0.15, 0.30)
+    ub = 1.0 + noise_scale
+    lb = 1.0 / ub
+    sizes["size_head"] = 0.09 * random.uniform(lb, ub)
+    sizes["size_torso1"] = 0.07 * random.uniform(lb, ub)
+    sizes["len_torso1"] = 0.14 * random.uniform(lb, ub)
+    sizes["size_uwaist"] = 0.06 * random.uniform(lb, ub) 
+    sizes["len_uwaist"] = 0.12 * random.uniform(lb, ub) 
     sizes["dx_uwaist"] = random.uniform(-0.03, 0.03)
-    sizes["size_lwaist"] = random.uniform(0.05, 0.20)
+    sizes["size_lwaist"] = 0.06 * random.uniform(lb, ub)  
     sizes["dx_lwaist"] = random.uniform(-0.03, 0.03)
-    sizes["len_lwaist"] = random.uniform(0.15, 0.30)
-    sizes["size_pelvis"] = random.uniform(0.05, 0.20)
-    sizes["len_pelvis"] = random.uniform(0.15, 0.30)
-    sizes["size_thigh"] = random.uniform(0.06, 0.12)
-    sizes["len_thigh"] = random.uniform(0.25, 0.40)
-    sizes["size_shin"] = random.uniform(0.05, 0.10)
-    sizes["len_shin"] = random.uniform(0.25, 0.40)
-    sizes["size_foot"] = random.uniform(0.06, 0.15)
-    sizes["size_upper_arm"] = random.uniform(0.05, 0.10)
-    sizes["len_upper_arm"] = random.uniform(0.20, 0.40)
-    sizes["size_lower_arm"] = random.uniform(0.05, 0.10)
-    sizes["len_lower_arm"] = random.uniform(0.20, 0.40)
-    sizes["size_hand"] = random.uniform(0.05, 0.10)
+    sizes["len_lwaist"] = 0.12 * random.uniform(lb, ub) 
+    sizes["size_pelvis"] = 0.09 * random.uniform(lb, ub) 
+    sizes["len_pelvis"] = 0.14 * random.uniform(lb, ub) 
+    sizes["size_thigh"] = 0.06 * random.uniform(lb, ub) 
+    sizes["len_thigh"] = 0.35 * random.uniform(lb, ub) 
+    sizes["size_shin"] = 0.049 * random.uniform(lb, ub) 
+    sizes["len_shin"] = 0.30 * random.uniform(lb, ub) 
+    sizes["size_foot"] = 0.075 * random.uniform(lb, ub) 
+    sizes["size_upper_arm"] = 0.04 * random.uniform(lb, ub) 
+    sizes["len_upper_arm"] = 0.16 * random.uniform(lb, ub) 
+    sizes["size_lower_arm"] = 0.03 * random.uniform(lb, ub) 
+    sizes["len_lower_arm"] = 0.16 * random.uniform(lb, ub) 
+    sizes["size_hand"] = 0.04 * random.uniform(lb, ub) 
 
     # torso1 to head
-    sizes["t2h"] = sizes["size_torso1"] + sizes["size_head"] + random.uniform(0.01, 0.03)
+    sizes["t2h"] = sizes["size_torso1"] + sizes["size_head"] + random.uniform(-0.01, 0.02)
     # upper waist1 to torso1
-    sizes["u2t"] = sizes["size_uwaist"] + sizes["size_torso1"] + random.uniform(0.01, 0.03)
+    sizes["u2t"] = sizes["size_uwaist"] + sizes["size_torso1"] + random.uniform(-0.01, 0.02)
     # lower waist1 to torso1
-    sizes["l2t"] = 2 * sizes["size_uwaist"] + sizes["size_torso1"] + sizes["size_lwaist"] + random.uniform(0.01, 0.03)
+    sizes["l2t"] = 2 * sizes["size_uwaist"] + sizes["size_torso1"] + sizes["size_lwaist"] + random.uniform(-0.01, 0.02)
     # pelvis to lower waist1
-    sizes["p2l"] = sizes["size_pelvis"] + sizes["size_lwaist"] + random.uniform(0.01, 0.03)
+    sizes["p2l"] = sizes["size_pelvis"] + sizes["size_lwaist"] + random.uniform(-0.01, 0.02)
     # thigh root to pelvis
-    sizes["th2p"] = sizes["size_pelvis"] * random.uniform(0.5, 1.2)
     sizes["th2p_x"] = random.uniform(-0.02, 0.02)
     sizes["th2p_y"] = sizes["len_pelvis"] / 2 + random.uniform(-0.01, 0.01)
+    sizes["th2p_z"] = sizes["size_pelvis"] * random.uniform(-0.05, 0.05)
     # shin to thigh
-    sizes["s2th"] = sizes["len_thigh"] + sizes["size_thigh"] + random.uniform(0.01, 0.03)
+    sizes["s2th"] = sizes["len_thigh"] + sizes["size_thigh"] + sizes["size_shin"] + random.uniform(-0.01, 0.02)
     # foot to shin
-    sizes["f2s"] = sizes["len_shin"] + sizes["size_shin"] + sizes["size_foot"] + random.uniform(0.01, 0.03)
-    sizes["foot_height"] = sizes["size_foot"] + random.uniform(0.01, 0.05)
+    sizes["f2s"] = sizes["len_shin"] + sizes["size_shin"] + sizes["size_foot"] + random.uniform(-0.01, 0.02)
+    sizes["foot_height"] = sizes["size_foot"] + random.uniform(-0.01, 0.02)
     # upper arm to torso1
-    sizes["ua2t"] = sizes["size_torso1"] + random.uniform(0.01, 0.03)
-    sizes["ua2t_y"] = sizes["len_torso1"] / 2 + sizes["size_upper_arm"] + random.uniform(0.01, 0.03)
+    sizes["ua2t"] = sizes["size_torso1"] + random.uniform(-0.01, 0.02)
+    sizes["ua2t_y"] = sizes["len_torso1"] / 2 + sizes["size_upper_arm"] + random.uniform(-0.01, 0.02)
     # lower arm to upper arm
-    sizes["la2ua"] = sizes["len_upper_arm"] + random.uniform(0.01, 0.05)
+    sizes["la2ua"] = sizes["len_upper_arm"] + sizes["size_lower_arm"] + random.uniform(-0.01, 0.02)
     # hand to lower arm
-    sizes["h2la"] = sizes["len_lower_arm"] + random.uniform(0.01, 0.03)
+    sizes["h2la"] = sizes["len_lower_arm"] + sizes["size_hand"] + random.uniform(-0.01, 0.02)
     sizes["torso_height"] = (sizes["t2h"] + sizes["u2t"] + sizes["l2t"] + sizes["p2l"] +
-                                sizes["th2p"] + sizes["s2th"] + sizes["f2s"] + sizes["size_foot"])
+                                sizes["th2p_z"] + sizes["s2th"] + sizes["f2s"] + sizes["size_foot"])
     # lower arm origin offset
-    sizes["la_origin"] = random.uniform(-0.01, 0.03)
+    sizes["la_origin"] = random.uniform(-0.01, 0.02)
     # pelvis to lower waist joint position
-    sizes["pelvis_lwaist_joint_pos"] = sizes["size_pelvis"] + random.uniform(0.01, 0.05)
+    sizes["pelvis_lwaist_joint_pos"] = sizes["size_pelvis"] + random.uniform(-0.01, 0.02)
 
     # thigh direction
     sizes["lthigh_direction"] = (0, -random.uniform(0.0, 0.1), -1.0)
@@ -382,7 +384,7 @@ def create_random_humanoid():
 
         joint_names = [f"{side}_hip_x", f"{side}_hip_y", f"{side}_hip_z"]
         thigh = create_body(pelvis, f"{side}_thigh", 
-                    pos=[body_attrs["th2p_x"], sign * body_attrs["th2p_y"], body_attrs["th2p"]],
+                    pos=[body_attrs["th2p_x"], sign * body_attrs["th2p_y"], -body_attrs["th2p_z"]],
                     geom_type="capsule",
                     geom_len=body_attrs["len_thigh"],
                     geom_size=body_attrs["size_thigh"],
@@ -406,7 +408,7 @@ def create_random_humanoid():
 
         foot = ET_sub(shin, "geom", 
                         {"name": f"{side}_foot", 
-                        "pos": (0, 0, body_attrs["f2s"]),
+                        "pos": (0, 0, -body_attrs["f2s"]),
                         "size": body_attrs["size_foot"],
                         "type": "sphere",
                         "user": "0"})
@@ -435,6 +437,7 @@ def create_random_humanoid():
                     geom_type="capsule",
                     geom_len=body_attrs["len_lower_arm"],
                     geom_size=body_attrs["size_lower_arm"],
+                    geom_dir=(1, -sign, 1),
                     geom_pos=(body_attrs["la_origin"], -body_attrs["la_origin"] * sign, body_attrs["la_origin"]),
                     joint_names = [f"{side}_elbow"],
                     joint_attrs = joints_attrs,
