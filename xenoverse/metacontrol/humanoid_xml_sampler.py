@@ -106,22 +106,33 @@ def ET_set(element, attrib={}):
             element.set(k, strval(v))
     return element
 
-def sample_all_joint_attributes(asymmetric=True):
+def sample_all_joint_attributes(asymmetric=True, noise_scale=1.0):
     """Sample all joint attributes for a humanoid"""
+    ub = 1.0 + noise_scale
+    lb = 1.0 / ub
+    dr = (5 * lb, 5 * ub)
+    sr1 = (10 * lb, 10 * ub)
+    sr2 = (20 * lb, 20 * ub)
+    sr3 = (lb, ub)
+    ar1 = (0.02 * lb, 0.02 * ub)
+    ar2 = (0.01 * lb, 0.01 * ub)
+    ar3 = (0.005 * lb, 0.005 * ub)
+    ar4 = (0.003 * lb, 0.003 * ub)
+
     joint_attrs = {}
-    joint_attrs["abdomen_z"] = sample_joint_attributes((0.01, 0.1), (1.0, 10.0), (5, 100), (-90, -30), (30, 90))
-    joint_attrs["abdomen_y"] = sample_joint_attributes( (0.01, 0.1), (1.0, 10.0), (5, 100), (-120, -45), (15, 60))
-    joint_attrs["abdomen_x"] = sample_joint_attributes((0.01, 0.1), (1.0, 10.0), (5, 100), (-75, -15))
+    joint_attrs["abdomen_z"] = sample_joint_attributes(ar1, dr, sr2, (-90, -30), (30, 90))
+    joint_attrs["abdomen_y"] = sample_joint_attributes(ar1, dr, sr1, (-120, -45), (15, 60))
+    joint_attrs["abdomen_x"] = sample_joint_attributes(ar1, dr, sr1, (-75, -15))
 
-    joint_attrs["left_hip_x"] = sample_joint_attributes((0.01, 0.1), (1.0, 10.0), (5, 100), (-50, -15), (0, 15))
-    joint_attrs["left_hip_y"] = sample_joint_attributes((0.01, 0.1), (1.0, 10.0), (5, 100), (-90, -30), (15, 70))
-    joint_attrs["left_hip_z"] = sample_joint_attributes((0.01, 0.1), (1.0, 10.0), (5, 100), (-160, -80), (10, 40))
+    joint_attrs["left_hip_x"] = sample_joint_attributes(ar2, dr, sr1, (-50, -15), (0, 15))
+    joint_attrs["left_hip_y"] = sample_joint_attributes(ar2, dr, sr2, (-90, -30), (15, 70))
+    joint_attrs["left_hip_z"] = sample_joint_attributes(ar2, dr, sr1, (-160, -80), (10, 40))
 
-    joint_attrs["left_knee"] = sample_joint_attributes((0.002, 0.025), (1.0, 10.0), (0.5, 5), (-160, -90), (-20, 5))
+    joint_attrs["left_knee"] = sample_joint_attributes(ar2, dr, sr2, (-160, -90), (-20, 5))
 
-    joint_attrs["left_shoulder1"] = sample_joint_attributes((0.002, 0.025), (1.0, 10.0), (5, 100), (-120, -30), (30, 120))
-    joint_attrs["left_shoulder2"] = sample_joint_attributes((0.002, 0.025), (1.0, 10.0), (5, 100), (-120, -30), (30, 120))
-    joint_attrs["left_elbow"] = sample_joint_attributes((0.001, 0.010), (1.0, 10.0), (0.5, 5), (-160, -45), (30, 90))
+    joint_attrs["left_shoulder1"] = sample_joint_attributes(ar3, dr, sr3, (-120, -30), (30, 120))
+    joint_attrs["left_shoulder2"] = sample_joint_attributes(ar3, dr, sr3, (-120, -30), (30, 120))
+    joint_attrs["left_elbow"] = sample_joint_attributes(ar4, dr, sr3, (-160, -45), (30, 90))
 
     for ljname in ["left_hip_x", "left_hip_y", "left_hip_z", "left_knee", "left_shoulder1", "left_shoulder2", "left_elbow"]:
         rjname = ljname.replace("left", "right")
@@ -304,7 +315,7 @@ def create_body(parent_element, name, pos,
         raise ValueError(f"Unsupported geom_type: {geom_type}")
     return body
  
-def create_random_humanoid():
+def create_random_humanoid(noise_scale=1.0):
     # Create the xml root element
     root = ET.Element("mujoco", {"model": "random_humanoid"})
     prepare_assets(root)
@@ -325,8 +336,8 @@ def create_random_humanoid():
         "rgba": "0.8 0.9 0.8 1"
     })
     
-    body_attrs = sample_all_limb_sizes()
-    joints_attrs = sample_all_joint_attributes(asymmetric=True)
+    body_attrs = sample_all_limb_sizes(noise_scale=noise_scale)
+    joints_attrs = sample_all_joint_attributes(asymmetric=True, noise_scale=noise_scale)
 
     # Create the root body with a free joint
     torso = ET_sub(worldbody, "body", {"name": "torso", "pos": (0, 0, body_attrs["torso_height"])})
@@ -469,8 +480,8 @@ def create_random_humanoid():
     xml_str = minidom.parseString(ET.tostring(root)).toprettyxml(indent="  ")
     return xml_str
 
-def main(output_file):
-    xml_str = create_random_humanoid()
+def humanoid_xml_sampler(output_file, noise_scale=1.0):
+    xml_str = create_random_humanoid(noise_scale=noise_scale)
     with open(output_file, 'w') as file:
         file.write(xml_str)
 
@@ -479,4 +490,4 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Generate a random humanoid model using MuJoCo.')
     parser.add_argument('--output', '-o', default='random_humanoid.xml', help='Output XML file path')
     args = parser.parse_args()
-    main(args.output)
+    humanoid_xml_sampler(args.output)

@@ -15,7 +15,7 @@
 from gymnasium.envs.registration import register
 from xenoverse.metacontrol.random_cartpole import sample_cartpole,RandomCartPoleEnv
 from xenoverse.metacontrol.random_acrobot import sample_acrobot, RandomAcrobotEnv
-from xenoverse.metacontrol.random_humanoid import RandomHumanoidEnv
+from xenoverse.metacontrol.random_humanoid import RandomHumanoidEnv, sample_humanoid, get_humanoid_tasks
 
 register(
     id='random-cartpole-v0',
