@@ -37,8 +37,12 @@ class LinearDSEnv(gym.Env):
             print('state dim:', self.state_dim)
             print('observation dim:', self.observation_dim)
             print('action dim:', self.action_dim)
+            print('reward dim:', self.reward_dim)
             print('max steps:', self.max_steps)
         self.build_dynamics_matrices()
+
+    def get_vector_reward_space(self, observation):
+        return self.reward_weight @ observation + self.reward_bias
 
     def build_dynamics_matrices(self):
         # ZOH discretization
@@ -49,15 +53,17 @@ class LinearDSEnv(gym.Env):
         M_exp = expm(M * self.dt)
         self.ld_phi = M_exp[:self.state_dim, :self.state_dim]           # e^(A*dt)
         self.ld_gamma = M_exp[:self.state_dim, self.state_dim:] @ self.ld_B    # ∫e^(A*τ)dτ * B
+        self.ld_Xt = self.ld_X * self.dt
 
     def dynamics(self, action):
-        return self.ld_phi @ self._state + self.ld_gamma @ numpy.array(action) + self.ld_X
+        noise = numpy.random.randn(self.state_dim) * self.noise_drift * self.dt
+        return self.ld_phi @ self._state + self.ld_gamma @ numpy.array(action) + self.ld_Xt + noise
     
     #Get the current observations from the current state
     @property
     def get_observation(self):
         return self.ld_C @ self._state + self.ld_Y
-
+    
     def reset(self, *args, **kwargs):
         if(not self.task_set):
             raise Exception("Must call \"set_task\" first")
@@ -67,9 +73,16 @@ class LinearDSEnv(gym.Env):
         random.seed(pseudo_random_seed())
 
         self._state = numpy.copy(rnd.choice(self.initial_states))
-        self._cmd = random.randn(self.state_dim) * random.choice([0, 1])
 
-        return self.get_observation, {"steps": self.steps, "command": self._cmd}
+        # if command is not fixed, sample a random command whenever reset
+        if(self.target_type=="static_target"):
+            self._cmd = numpy.copy(self.command)
+        else:
+            self._cmd = random.randn(self.reward_dim) * random.choice([0, 1])
+
+        return self.get_observation, {"steps": self.steps, 
+                                      "command": self._cmd, 
+                                      "command_type": self.target_type}
 
     def step(self, action):
         if(self.need_reset or not self.task_set):
@@ -78,7 +91,8 @@ class LinearDSEnv(gym.Env):
         act = numpy.clip(action, self.action_space.low, self.action_space.high)
 
         self._state = self.dynamics(act)
-        dist = numpy.linalg.norm(self._state - self._cmd)
+        obs = self.get_observation
+        dist = numpy.linalg.norm(self.get_vector_reward_space(obs) - self._cmd)
 
         if(dist > 10.0):
             terminated = True
@@ -89,12 +103,12 @@ class LinearDSEnv(gym.Env):
 
         observation = self.get_observation
 
-        reward += self.reward_base - self.reward_factor * dist \
-            - self.action_cost * numpy.sum(numpy.square(action))
+        reward += (self.reward_base - self.reward_factor * dist \
+            - self.action_cost * numpy.sum(numpy.square(action))) * self.dt
         self.steps += 1
         truncated = (self.steps >= self.max_steps - 1)
 
-        return self.get_observation, reward, terminated, truncated, {"steps": self.steps, "command": self._cmd}
+        return obs, reward, terminated, truncated, {"steps": self.steps, "command": self._cmd}
     
     @property
     def state(self):

@@ -1,9 +1,62 @@
 """
 Any MDP Task Sampler
 """
+import numpy
 from numpy import random
 from copy import deepcopy
 from xenoverse.utils import pseudo_random_seed, weights_and_biases
+
+
+def banded_trim(A, C):
+    no, ns = C.shape
+    An, Cn = A.copy(), C.copy()
+    width = random.randint(2, max(ns // 2, 3))
+    if (width >= ns):
+        return An, Cn
+    for i in range(ns):
+        for j in range(ns):
+            if(abs(i - j) > width):
+                An[i, j] = 0.0
+    Cn[:, :-width] = 0.0
+    return An, Cn
+
+def triangle_trim(A, C):
+    no, ns = C.shape
+    An, Cn = A.copy(), C.copy()
+    width = random.randint(-1, max(ns // 4, 2))
+    if (width >= ns):
+        return An, Cn
+    for i in range(ns):
+        for j in range(ns):
+            if(j < i + width):
+                An[i, j] = 0.0
+    return An, Cn
+
+def no_trim(A, C):
+    return A, C
+
+def sample_variants_(ns, na, no):
+    AB, X = weights_and_biases(ns+na, ns, need_bias=True)
+    C, Y = weights_and_biases(ns, no, need_bias=False)
+
+    A = AB[:, :ns] * random.choice([0.01, 0.02, 0.05, 0.1, 0.2, 0.5])
+    B = AB[:, ns:]
+    X = X * random.choice([0.0, 0.05, 0.1])
+
+    trim_funcs = [banded_trim, triangle_trim, no_trim]
+    trim_func = random.choice(trim_funcs)
+    A, C = trim_func(A, C)
+
+    return A, B, C, X, Y
+
+def sample_reward_spaces_(no):
+    if(random.random() < 0.5):
+        return numpy.eye(no), numpy.zeros((no,)), no
+    nr = random.randint(1, no)
+    wr, rb = weights_and_biases(no, nr, need_bias=False)
+    wr_mask = random.binomial(1, nr/no, size=(1, wr.shape[1]))
+    wr = wr * wr_mask
+    return wr, rb, nr
 
 def LinearDSSampler(state_dim:int=16,
                  action_dim:int=8,
@@ -37,26 +90,29 @@ def LinearDSSampler(state_dim:int=16,
 
     task["max_steps"] = random.randint(100, 1000) # At most 10-dimensional space
 
-    AB, X = weights_and_biases(state_dim + action_dim, state_dim, need_bias=True)
-    C, Y = weights_and_biases(state_dim, observation_dim, need_bias=False)
-
-    task["ld_A"] = AB[:, :state_dim] * random.choice([0.01, 0.02, 0.05, 0.1, 0.2])
-    task["ld_B"] = AB[:, state_dim:]
-    task["ld_C"] = C
-    task["ld_X"] = X
-    task["ld_Y"] = Y
+    task["ld_A"], task["ld_B"], task["ld_C"], task["ld_X"], task["ld_Y"] = sample_variants_(state_dim, action_dim, observation_dim)
 
     # Sample rewards
     task["action_cost"] = max(random.uniform(-0.05, 0.05), 0.0)
     task["reward_base"] = random.exponential(scale=0.10) + task["action_cost"]
     task["terminate_punish"] = random.uniform(1.0, 100.0)
 
-
     # probability without any procedural reward
     task["reward_factor"] = min(random.exponential(scale=0.01), 0.1 * task["reward_base"])
+    task["reward_weight"], task["reward_bias"], task["reward_dim"] = sample_reward_spaces_(observation_dim)
 
     born_loc = int(max(random.exponential(scale=1.0), 1))
     task["initial_states"] = [random.randn(state_dim) for _ in range(born_loc)]
-
+    task["noise_drift"] = numpy.clip(random.uniform(-0.02, 0.02), 0.0, 0.02)
+    
+    # fixed command versus random command
+    target_type = random.choice(["static_target", "dynamic_target"])
+    task["target_type"] = target_type
+    if(target_type == "static_target"):
+        task["command"] = random.randn(task["reward_dim"]) * random.choice([0, 1])
+    elif(target_type == "dynamic_target"):
+        task["command"] = None
+    else:
+        raise Exception("Unknown target type: {}".format(target_type))
 
     return task
