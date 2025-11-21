@@ -22,7 +22,7 @@ class LinearDSVisualizer(LinearDSEnv):
     def reset(self, *args, **kwargs):
         obs, info = super().reset()
         self.observation_records.append(numpy.copy(obs))
-        self.action_records.append(numpy.zeros((self.action_dim,)))
+        self.action_records.append(numpy.zeros(self.action_space.shape))
         self.inner_state_records.append(numpy.copy(self._state))
         self.reward_records.append(0.0)
 

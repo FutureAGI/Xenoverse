@@ -88,7 +88,6 @@ class LinearDSEnv(gym.Env):
 
     def dynamics(self, action):
         noise = numpy.random.randn(self.state_dim) * self.noise_drift * self.dt
-        print(self.ld_gamma.shape, numpy.array(action).shape)
         return self.ld_phi @ self._state + self.ld_gamma @ numpy.array(action) + self.ld_Xt + noise
     
     #Get the current observations from the current state

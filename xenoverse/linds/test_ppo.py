@@ -2,15 +2,14 @@ if __name__=="__main__":
     import gymnasium as gym
     import numpy
     import argparse
-    from xenoverse.linds import LinearDSSampler
+    from xenoverse.linds import LinearDSSamplerRandomDim
 
     from stable_baselines3 import PPO, SAC
     from sb3_contrib import RecurrentPPO
     from stable_baselines3.common.env_util import make_vec_env
     from stable_baselines3.common.evaluation import evaluate_policy
 
-    task = LinearDSSampler(state_dim=16,
-                             action_dim=16)
+    task = LinearDSSamplerRandomDim()
 
     env = gym.make("linear-dynamics-v0-visualizer") 
     env.set_task(task, verbose=True, reward_shaping=True)

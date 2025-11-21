@@ -5,6 +5,7 @@ import numpy
 from numpy import random
 from copy import deepcopy
 from xenoverse.utils import pseudo_random_seed, weights_and_biases
+import pickle
 
 
 def banded_trim(A, C):
@@ -130,3 +131,22 @@ def LinearDSSamplerRandomDim(max_state_dim:int=16,
                 action_dim=action_dim, 
                 observation_dim=observation_dim,
                 seed=seed, verbose=verbose)
+
+
+def dump_linds_task(file, task):
+    with open(file, 'wb') as f:
+        pickle.dump(task, f)
+
+def load_linds_task(file):
+    with open(file, 'rb') as f:
+        task = pickle.load(f)
+    return task
+
+if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--output', type=str, default='lind_task.pkl', help='Output file for the sampled LIND task')
+    args = parser.parse_args()
+
+    task = LinearDSSamplerRandomDim()
+    dump_linds_task(args.output, task)

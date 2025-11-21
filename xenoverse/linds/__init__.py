@@ -14,7 +14,7 @@
 
 from gymnasium.envs.registration import register
 from xenoverse.linds.linds_env import LinearDSEnv
-from xenoverse.linds.task_sampler import LinearDSSampler, LinearDSSamplerRandomDim
+from xenoverse.linds.task_sampler import LinearDSSampler, LinearDSSamplerRandomDim, dump_linds_task, load_linds_task
 from xenoverse.linds.visualizer import LinearDSVisualizer
 
 register(

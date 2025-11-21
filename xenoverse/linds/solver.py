@@ -107,8 +107,6 @@ class LTISystemMPC:
         f = self.F1 @ x + self.F2 - Y_ref
         f = f.T @ self.W_Q @ self.H
         f = f.flatten()
-        print(self.W_H.shape, f.shape, self.A_cons.shape, self.u_lb.shape, self.u_ub.shape)
-        print(self.Nx, self.Nu, self.Ny)
         prob = osqp.OSQP()
         prob.setup(sparse.csc_matrix(self.W_H), f, sparse.csc_matrix(self.A_cons), 
                    self.u_lb, self.u_ub, verbose=False)
