@@ -10,7 +10,7 @@ from xenoverse.utils import pseudo_random_seed, weights_and_biases
 def banded_trim(A, C):
     no, ns = C.shape
     An, Cn = A.copy(), C.copy()
-    width = random.randint(2, max(ns // 2, 3))
+    width = random.randint(2, max(ns // 2, 3) + 1)
     if (width >= ns):
         return An, Cn
     for i in range(ns):
@@ -23,7 +23,7 @@ def banded_trim(A, C):
 def triangle_trim(A, C):
     no, ns = C.shape
     An, Cn = A.copy(), C.copy()
-    width = random.randint(-1, max(ns // 4, 2))
+    width = random.randint(-1, max(ns // 4, 2) + 1)
     if (width >= ns):
         return An, Cn
     for i in range(ns):
@@ -52,7 +52,7 @@ def sample_variants_(ns, na, no):
 def sample_reward_spaces_(no):
     if(random.random() < 0.5):
         return numpy.eye(no), numpy.zeros((no,)), no
-    nr = random.randint(1, no)
+    nr = random.randint(1, no + 1)
     wr, rb = weights_and_biases(no, nr, need_bias=False)
     wr_mask = random.binomial(1, nr/no, size=(1, wr.shape[1]))
     wr = wr * wr_mask
@@ -116,3 +116,17 @@ def LinearDSSampler(state_dim:int=16,
         raise Exception("Unknown target type: {}".format(target_type))
 
     return task
+
+def LinearDSSamplerRandomDim(max_state_dim:int=16,
+                 max_action_dim:int=8,
+                 seed=None,
+                 verbose=False):
+    state_dim = random.randint(1, max_state_dim+1)
+    min_action_dim = max(1, state_dim // 2)
+    max_action_dim = min(max_action_dim, state_dim)
+    action_dim = random.randint(min_action_dim, max_action_dim+1)
+    observation_dim = random.randint(state_dim // 4, state_dim + 1)
+    return LinearDSSampler(state_dim=state_dim,
+                action_dim=action_dim, 
+                observation_dim=observation_dim,
+                seed=seed, verbose=verbose)

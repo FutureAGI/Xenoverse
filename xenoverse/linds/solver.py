@@ -21,7 +21,7 @@ class LTISystemMPC:
     def __init__(self, env,
                  K=20, # forward looking steps
                  gamma=0.99): # cost for each action relative to observation
-        
+        self.Na = env.action_space.shape[0]
         self.Nx = env.state_dim  # state dimension
         self.Nu = env.action_dim  # action dimension
         self.Ny = env.reward_dim  # optimize in reward dimension
@@ -30,8 +30,6 @@ class LTISystemMPC:
         self.C = env.reward_weight @ env.ld_C   # directly map observation to reward space
         self.X = env.ld_Xt.reshape(-1, 1)
         self.Y = env.reward_weight @ env.ld_Y.reshape(-1, 1) + env.reward_bias.reshape(-1, 1)
-        print(self.C.shape, self.Y.shape)
-        
         # MPC parameters
         self.K = K  # forward looking steps
         Q = np.diag(gamma ** np.arange(K))  # discount factor weights
@@ -40,8 +38,8 @@ class LTISystemMPC:
         self.W_P = np.kron(P, np.eye(self.Nu))
         
         # constraints
-        self.u_min = env.action_space.low
-        self.u_max = env.action_space.high
+        self.u_min = env.action_space.low[:self.Nu]
+        self.u_max = env.action_space.high[:self.Nu]
 
         self.u_lb = np.kron(np.ones(self.K), self.u_min)
         self.u_ub = np.kron(np.ones(self.K), self.u_max)
@@ -96,20 +94,21 @@ class LTISystemMPC:
         Reference trajectory can be shorter than K steps
         """
         if(ref_trajectory.ndim == 1):
-            Y_ref = np.kron(np.ones((self.K)), ref_trajectory).reshape(-1, 1)
+            Y_ref = np.kron(np.ones((self.K)), ref_trajectory[:self.Ny]).reshape(-1, 1)
         else:
             Y_ref = np.zeros((self.K * self.Ny, 1))
             for i in range(self.K):
-                if(ref_trajectory.shape[1] > i):
-                    Y_ref[self.Ny * i:self.Ny * (i + 1), 0] = ref_trajectory[:, i].flatten()
+                if(ref_trajectory.shape[0] > i):
+                    Y_ref[self.Ny * i:self.Ny * (i + 1), 0] = ref_trajectory[i, :self.Ny].flatten()
                 else:
-                    Y_ref[self.Ny * i:self.Ny * (i + 1), 0] = ref_trajectory[:, -1].flatten()
+                    Y_ref[self.Ny * i:self.Ny * (i + 1), 0] = ref_trajectory[-1, :self.Ny].flatten()
         x = x_current.reshape(-1, 1)
 
         f = self.F1 @ x + self.F2 - Y_ref
         f = f.T @ self.W_Q @ self.H
         f = f.flatten()
-
+        print(self.W_H.shape, f.shape, self.A_cons.shape, self.u_lb.shape, self.u_ub.shape)
+        print(self.Nx, self.Nu, self.Ny)
         prob = osqp.OSQP()
         prob.setup(sparse.csc_matrix(self.W_H), f, sparse.csc_matrix(self.A_cons), 
                    self.u_lb, self.u_ub, verbose=False)
@@ -120,7 +119,8 @@ class LTISystemMPC:
             return None
 
         # return the optimal control sequence
-        u_opt = res.x[0:self.Nu]
+        u_opt = numpy.zeros((self.Na, ))
+        u_opt[:self.Nu] = res.x[:self.Nu]
         return u_opt
 
 def test_mpc(env):
@@ -140,6 +140,7 @@ def test_mpc(env):
 
         obs, reward, terminated, truncated, info = env.step(action)
         cmd = info["command"]
+        
         print("action:", action, "observation", obs, "command", cmd, "reward", reward)
 
         error = np.linalg.norm(env.get_vector_reward_space(obs) - cmd)
@@ -178,11 +179,9 @@ def test_mpc(env):
 if __name__ == "__main__":
     import gymnasium as gym
     import numpy
-    from xenoverse.linds import LinearDSSampler
+    from xenoverse.linds import LinearDSSamplerRandomDim
 
-    task = LinearDSSampler(state_dim=8, 
-                             action_dim=8,
-                             observation_dim=6)
+    task = LinearDSSamplerRandomDim()
     env = gym.make("linear-dynamics-v0-visualizer")
     env.set_task(task)
 
