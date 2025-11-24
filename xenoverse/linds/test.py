@@ -1,10 +1,9 @@
 if __name__=="__main__":
     import gymnasium as gym
     import numpy
-    from xenoverse.linds import LinearDSSampler
+    from xenoverse.linds import LinearDSSamplerRandomDim
 
-    task = LinearDSSampler(state_dim=128, 
-                             action_dim=16)
+    task = LinearDSSamplerRandomDim()
     max_steps = 5000
     prt_freq = 100
 

@@ -14,8 +14,9 @@
 
 from gymnasium.envs.registration import register
 from xenoverse.linds.linds_env import LinearDSEnv
-from xenoverse.linds.task_sampler import LinearDSSampler
+from xenoverse.linds.task_sampler import LinearDSSampler, LinearDSSamplerRandomDim, dump_linds_task, load_linds_task
 from xenoverse.linds.visualizer import LinearDSVisualizer
+from xenoverse.linds.solver import LTISystemMPC
 
 register(
     id='linear-dynamics-v0',
