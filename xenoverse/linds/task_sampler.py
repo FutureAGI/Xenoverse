@@ -3,6 +3,7 @@ Any MDP Task Sampler
 """
 import numpy
 from numpy import random
+from numpy import linalg
 from copy import deepcopy
 from xenoverse.utils import pseudo_random_seed, weights_and_biases
 import pickle
@@ -90,8 +91,11 @@ def LinearDSSampler(state_dim:int=16,
     task["action_dim"] = action_dim
 
     task["max_steps"] = random.randint(100, 1000) # At most 10-dimensional space
-
-    task["ld_A"], task["ld_B"], task["ld_C"], task["ld_X"], task["ld_Y"] = sample_variants_(state_dim, action_dim, observation_dim)
+    task_valid = False
+    while task_valid is False:
+        task["ld_A"], task["ld_B"], task["ld_C"], task["ld_X"], task["ld_Y"] = sample_variants_(state_dim, action_dim, observation_dim)
+        task_valid = (linalg.matrix_rank(task["ld_B"]) > min(action_dim, state_dim)-1) and \
+            (linalg.matrix_rank(task["ld_C"]) > min(observation_dim, state_dim) - 1)
 
     # Sample rewards
     task["action_cost"] = max(random.uniform(-0.05, 0.05), 0.0)
@@ -100,7 +104,10 @@ def LinearDSSampler(state_dim:int=16,
 
     # probability without any procedural reward
     task["reward_factor"] = min(random.exponential(scale=0.01), 0.1 * task["reward_base"])
-    task["reward_weight"], task["reward_bias"], task["reward_dim"] = sample_reward_spaces_(observation_dim)
+    task_valid = False
+    while task_valid is False:
+        task["reward_weight"], task["reward_bias"], task["reward_dim"] = sample_reward_spaces_(observation_dim)
+        task_valid = (linalg.matrix_rank(numpy.abs(task["reward_weight"]) > 0.10) > task["reward_dim"] - 1)
 
     born_loc = int(max(random.exponential(scale=1.0), 1))
     task["initial_states"] = [random.randn(state_dim) for _ in range(born_loc)]
@@ -119,14 +126,19 @@ def LinearDSSampler(state_dim:int=16,
     return task
 
 def LinearDSSamplerRandomDim(max_state_dim:int=16,
+                             max_observation_dim:int=16,
                  max_action_dim:int=8,
                  seed=None,
                  verbose=False):
+    assert max_state_dim >= 2, "max_state_dim should be at least 2"
+    assert max_action_dim >= 1, "max_action_dim should be at least 1"
     state_dim = random.randint(1, max_state_dim+1)
-    min_action_dim = max(1, state_dim // 2)
-    max_action_dim = min(max_action_dim, state_dim)
+    min_action_dim = max(1, (state_dim + 1) // 2)
+    max_action_dim = min(max_action_dim, state_dim * 3 // 2)
+    min_observation_dim = max(1, state_dim // 4)
+    max_observation_dim = min(max_observation_dim, state_dim * 3 // 2)
     action_dim = random.randint(min_action_dim, max_action_dim+1)
-    observation_dim = random.randint(state_dim // 4, state_dim + 1)
+    observation_dim = random.randint(min_observation_dim, max_observation_dim + 1)
     return LinearDSSampler(state_dim=state_dim,
                 action_dim=action_dim, 
                 observation_dim=observation_dim,

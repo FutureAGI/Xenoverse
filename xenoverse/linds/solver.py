@@ -12,7 +12,7 @@ from scipy import sparse
 import osqp
 import matplotlib.pyplot as plt
 
-class LTISystemMPC:
+class LTISystemMPC(object):
     """
     Solving Linear Time-Invariant System Model Predictive Control Problem
     x_{k+1} = A x_k + B u_k + X
@@ -121,10 +121,10 @@ class LTISystemMPC:
         u_opt[:self.Nu] = res.x[:self.Nu]
         return u_opt
 
-def test_mpc(env):
+def test_mpc(env, use_mpc=True, plot=False):
     mpc = LTISystemMPC(env, K=50, gamma=0.99)
     
-    T_sim = 1000
+    T_sim = 400
     obs, info = env.reset()
     x_current = env._state
     cmd = info["command"]
@@ -134,12 +134,14 @@ def test_mpc(env):
     
     for t in range(T_sim):
         #action = env.action_space.sample()
-        action = mpc.solve(x_current, cmd)
+        if(use_mpc is False):
+            action = env.action_space.sample()
+        else:
+            action = mpc.solve(x_current, cmd)
 
         obs, reward, terminated, truncated, info = env.step(action)
         cmd = info["command"]
-        
-        print("action:", action, "observation", obs, "command", cmd, "reward", reward)
+        #print("action:", action, "observation", obs, "command", cmd, "reward", reward)
 
         error = np.linalg.norm(env.get_vector_reward_space(obs) - cmd)
         error_history.append(error)
@@ -152,26 +154,31 @@ def test_mpc(env):
             u_current = np.zeros((mpc.Nu, 1))
             cmd = info["command"]
         
-    plt.figure(figsize=(12, 8))
-    
-    plt.subplot(2, 1, 1)
-    plt.plot(error_history, 'b-', label='errors')
-    plt.legend()
-    plt.grid(True)
-    
-    plt.subplot(2, 1, 2)
-    plt.plot(reward_history, 'g-', label='rewards')
-    plt.legend()
-    plt.grid(True)
-    
-    plt.tight_layout()
-    plt.show()
+    if(plot):
+        plt.figure(figsize=(12, 8))
+        
+        plt.subplot(2, 1, 1)
+        plt.plot(error_history, 'b-', label='errors')
+        plt.legend()
+        plt.grid(True)
+        
+        plt.subplot(2, 1, 2)
+        plt.plot(reward_history, 'g-', label='rewards')
+        plt.legend()
+        plt.grid(True)
+        
+        plt.tight_layout()
+        plt.show()
     
     tracking_error = np.mean(error_history)
     rewards = np.mean(reward_history)
+    if(tracking_error < 0.01):
+        print(cmd, task["reward_weight"], task["reward_dim"])
+        print(task["ld_B"])
+
+    name = "MPC" if use_mpc else "Random"
     
-    print(f"Tracking Errors: {tracking_error:.4f}")
-    print(f"Rewards: {rewards:.4f}")
+    print(f"--{name}-- Tracking Errors: {tracking_error:.4f} Rewards: {rewards:.4f}")
 
 
 if __name__ == "__main__":
@@ -184,5 +191,6 @@ if __name__ == "__main__":
     env.set_task(task)
 
     print("Start MPC solver demonstration...")
+    test_mpc(env, use_mpc=False)
     test_mpc(env)
     print("...Test Passed")
