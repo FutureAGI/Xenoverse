@@ -61,19 +61,8 @@ class LinearDSEnv(gym.Env):
             print('state dim:', self.state_dim)
             print('observation dim:', self.observation_dim)
             print('action dim:', self.action_dim)
-            print('reward dim:', self.reward_dim)
             print('max steps:', self.max_steps)
         self.build_dynamics_matrices()
-
-    def get_vector_reward_space(self, observation):
-        if(self.use_pad_dim):
-            assert numpy.shape(observation)[0] == self.pad_observation_dim
-            reward_vec = numpy.zeros((self.pad_command_dim,))
-            reward_vec[:self.reward_dim] = self.reward_weight @ observation[:self.observation_dim] + self.reward_bias
-            return reward_vec
-        else:
-            assert numpy.shape(observation)[0] == self.observation_dim
-            return self.reward_weight @ observation + self.reward_bias
 
     def build_dynamics_matrices(self):
         # ZOH discretization
@@ -100,6 +89,21 @@ class LinearDSEnv(gym.Env):
             return padded_obs.tolist()
         else:
             return actual_obs
+        
+    def get_inner_cmd(self, step=0):
+        # if command is not fixed, sample a random command whenever reset
+        if(self.target_type=="static_target"):
+            return numpy.copy(self.command) * self.target_valid
+        else:
+            return self.command(step) * self.target_valid
+        
+    def get_final_cmd(self, cmd):
+        if(self.use_pad_dim):
+            padded_cmd = numpy.zeros((self.pad_command_dim,))
+            padded_cmd[:self.observation_dim] = cmd
+            return padded_cmd
+        else:
+            return cmd
 
     def reset(self, *args, **kwargs):
         if(not self.task_set):
@@ -108,22 +112,19 @@ class LinearDSEnv(gym.Env):
         self.steps = 0
         self.need_reset = False
         random.seed(pseudo_random_seed())
+        self._cmd_list = []
 
         self._state = numpy.copy(rnd.choice(self.initial_states))
 
-        # if command is not fixed, sample a random command whenever reset
+        # pre-fill the command list up to current step
         if(self.target_type=="static_target"):
-            self._cmd = numpy.copy(self.command)
+            self._cmd_list.append(self.get_inner_cmd())
         else:
-            self._cmd = random.randn(self.reward_dim) * random.choice([0, 1])
-        if(self.use_pad_dim):
-            padded_cmd = numpy.zeros((self.pad_command_dim,))
-            padded_cmd[:self.reward_dim] = self._cmd
-        else:
-            padded_cmd = self._cmd
+            for t in range(self.target_delay, -1, -1):
+                self._cmd_list.append(self.get_inner_cmd(-t))
 
         return self.get_observation, {"steps": self.steps, 
-                                      "command": padded_cmd, 
+                                      "command": self.get_final_cmd(self._cmd_list[-1]), 
                                       "command_type": self.target_type}
 
     def step(self, action):
@@ -140,30 +141,44 @@ class LinearDSEnv(gym.Env):
         self._state = self.dynamics(act)
         obs = self.get_observation
 
-        if(self.use_pad_dim):
-            padded_cmd = numpy.zeros((self.pad_command_dim,))
-            padded_cmd[:self.reward_dim] = self._cmd
-        else:
-            padded_cmd = self._cmd
+        self.steps += 1
+        # get the current command
+        # when there is a delay, the command is from several steps ago
+        self._cmd_list.append(self.get_inner_cmd(self.steps))
+        cmd = self._cmd_list.pop(0)
 
-        dist = numpy.linalg.norm(self.get_vector_reward_space(obs) - padded_cmd)
+        error = numpy.linalg.norm((numpy.array(obs[:self.observation_dim]) - cmd) * self.target_valid)
+        obs_scale = numpy.linalg.norm(obs)
 
-        if(dist > 10.0):
+        if(error > 10.0 or obs_scale > 20.0):
             terminated = True
             reward = -self.terminate_punish
         else:
             terminated = False
             reward = 0.0
 
-        observation = self.get_observation
-
-        reward += (self.reward_base - self.reward_factor * dist \
+        reward += (self.reward_base - self.reward_factor * error \
             - self.action_cost * numpy.sum(numpy.square(action))) * self.dt
-        self.steps += 1
         truncated = (self.steps >= self.max_steps - 1)
 
-        return obs, reward, terminated, truncated, {"steps": self.steps, "command": padded_cmd}
+        return obs, reward, terminated, truncated, {"steps": self.steps, 
+                                                    "command": self.get_final_cmd(self._cmd_list[-1]),
+                                                    "error": error}
     
+    def get_future_inner_cmds(self, K=None):
+        if(K is None or K <= 0):
+            return deepcopy(self._cmd_list)
+        else:
+            if(self.target_type=="static_target"):
+                return [deepcopy(self.command) for i in range(K)]
+            elif(self.target_type=="dynamic_target"):
+                cmd_list = deepcopy(self._cmd_list)
+                k = 0
+                while(len(cmd_list) < K):
+                    k += 1
+                    cmd_list.append(self.get_inner_cmd(self.steps + k))
+                return cmd_list
+
     @property
     def state(self):
         return numpy.copy(self._state)
