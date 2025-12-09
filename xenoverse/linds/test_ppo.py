@@ -8,6 +8,8 @@ if __name__=="__main__":
     from sb3_contrib import RecurrentPPO
     from stable_baselines3.common.env_util import make_vec_env
     from stable_baselines3.common.evaluation import evaluate_policy
+    from xenoverse.linds.task_sampler import dump_linds_task,load_linds_task
+
 
     task = LinearDSSamplerRandomDim()
 
@@ -18,7 +20,13 @@ if __name__=="__main__":
     args.add_argument("--max_step", type=int, default=200000)
     args.add_argument("--lr", type=float, default=3e-4)
     args.add_argument("--run", choices=["mlp", "lstm", "both"], default="both")
+    args.add_argument("--task", type=str, default=None)
     args = args.parse_args()
+    if(args.task is not None):
+        task = load_linds_task(args.task)
+    else:
+        task = LinearDSSamplerRandomDim()
+        dump_linds_task("./task.pkl", task)
 
     max_step = args.max_step
     lr = args.lr

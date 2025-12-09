@@ -14,7 +14,7 @@ In this implementation, we randomly generate the matrices $A$, $B$, $C$ as well 
 
 The reward function is also procedurally generated, with a base reward and a factor that scales the distance between the current observation and the command.
 
-$r(t)=r_0 - \alpha ||c(t) - D \cdot o(t) - E||^2 - \beta||u(t)||^2$
+$r(t)=r_0 - \alpha |w \cdot (c(t) - o(t)) |^2 - \beta|u(t)|^2$
 
 The initial states are randomly generated and the command is also randomly chosen.
 

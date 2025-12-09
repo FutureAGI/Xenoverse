@@ -5,60 +5,57 @@ import numpy
 from numpy import random
 from numpy import linalg
 from copy import deepcopy
-from xenoverse.utils import pseudo_random_seed, weights_and_biases
+from xenoverse.utils import pseudo_random_seed, weights_and_biases, RandomFourier
 import pickle
 
 
-def banded_trim(A, C):
+def banded_trim(A, B, C):
     no, ns = C.shape
-    An, Cn = A.copy(), C.copy()
+    An, Bn, Cn = A.copy(), B.copy(), C.copy()
     width = random.randint(2, max(ns // 2, 3) + 1)
     if (width >= ns):
-        return An, Cn
+        return An, Bn, Cn
     for i in range(ns):
         for j in range(ns):
             if(abs(i - j) > width):
                 An[i, j] = 0.0
-    Cn[:, :-width] = 0.0
-    return An, Cn
+    return An, Bn, Cn
 
-def triangle_trim(A, C):
+def triangle_trim(A, B, C):
     no, ns = C.shape
-    An, Cn = A.copy(), C.copy()
+    An, Bn, Cn = A.copy(), B.copy(), C.copy()
     width = random.randint(-1, max(ns // 4, 2) + 1)
     if (width >= ns):
-        return An, Cn
+        return An, Bn, Cn
     for i in range(ns):
         for j in range(ns):
             if(j < i + width):
                 An[i, j] = 0.0
-    return An, Cn
+    return An, Bn, Cn
 
-def no_trim(A, C):
-    return A, C
+def no_trim(A, B, C):
+    return A, B, C
 
 def sample_variants_(ns, na, no):
     AB, X = weights_and_biases(ns+na, ns, need_bias=True)
     C, Y = weights_and_biases(ns, no, need_bias=False)
 
-    A = AB[:, :ns] * random.choice([0.01, 0.02, 0.05, 0.1, 0.2, 0.5])
+    A = AB[:, :ns] * random.choice([0.01, 0.02, 0.05, 0.1, 0.2])
     B = AB[:, ns:]
     X = X * random.choice([0.0, 0.05, 0.1])
 
     trim_funcs = [banded_trim, triangle_trim, no_trim]
     trim_func = random.choice(trim_funcs)
-    A, C = trim_func(A, C)
+    A, B, C = trim_func(A, B, C)
 
     return A, B, C, X, Y
 
-def sample_reward_spaces_(no):
-    if(random.random() < 0.5):
-        return numpy.eye(no), numpy.zeros((no,)), no
-    nr = random.randint(1, no + 1)
-    wr, rb = weights_and_biases(no, nr, need_bias=False)
-    wr_mask = random.binomial(1, nr/no, size=(1, wr.shape[1]))
-    wr = wr * wr_mask
-    return wr, rb, nr
+def sample_target_spaces_(no):
+    eps = min(random.uniform(0.2, 1.2), 1.0)
+    tgt_valid = numpy.zeros((no,))
+    while(numpy.sum(tgt_valid) < 0.5):
+        tgt_valid = random.binomial(1, eps, size=(no,))
+    return tgt_valid
 
 def LinearDSSampler(state_dim:int=16,
                  action_dim:int=8,
@@ -98,30 +95,41 @@ def LinearDSSampler(state_dim:int=16,
             (linalg.matrix_rank(task["ld_C"]) > min(observation_dim, state_dim) - 1)
 
     # Sample rewards
-    task["action_cost"] = max(random.uniform(-0.05, 0.05), 0.0)
-    task["reward_base"] = random.exponential(scale=0.10) + task["action_cost"]
-    task["terminate_punish"] = random.uniform(1.0, 100.0)
+    task["action_cost"] = max(random.uniform(-1.0, 1.0) * random.exponential(0.05), 0.0)
+    task["reward_base"] = random.exponential(0.10)
+    task["terminate_punish"] = random.exponential(scale=5.0) * random.choice([0, 1, 1])
 
     # probability without any procedural reward
-    task["reward_factor"] = min(random.exponential(scale=0.01), 0.1 * task["reward_base"])
-    task_valid = False
-    while task_valid is False:
-        task["reward_weight"], task["reward_bias"], task["reward_dim"] = sample_reward_spaces_(observation_dim)
-        task_valid = (linalg.matrix_rank(numpy.abs(task["reward_weight"]) > 0.10) > task["reward_dim"] - 1)
+    task["reward_factor"] = random.exponential(scale=0.50)
+    task["target_valid"]= sample_target_spaces_(observation_dim)
+    task["target_type"] = random.choice(["dynamic_target", "dynamic_target", "static_target"])
 
-    born_loc = int(max(random.exponential(scale=1.0), 1))
-    task["initial_states"] = [random.randn(state_dim) for _ in range(born_loc)]
-    task["noise_drift"] = numpy.clip(random.uniform(-0.02, 0.02), 0.0, 0.02)
-    
-    # fixed command versus random command
-    target_type = random.choice(["static_target", "dynamic_target"])
-    task["target_type"] = target_type
-    if(target_type == "static_target"):
-        task["command"] = random.randn(task["reward_dim"]) * random.choice([0, 1])
-    elif(target_type == "dynamic_target"):
-        task["command"] = None
-    else:
-        raise Exception("Unknown target type: {}".format(target_type))
+    is_valid_task = False
+    while not is_valid_task:
+        born_loc = int(max(random.exponential(scale=1.0), 1))
+        task["initial_states"] = [random.randn(state_dim) for _ in range(born_loc)]
+        task["noise_drift"] = numpy.clip(random.uniform(-0.02, 0.02), 0.0, 0.02)
+        
+        # fixed command versus random command
+        if(task["target_type"] == "static_target"):
+            task["command"] = random.randn(observation_dim) * random.choice([0, 1])
+            task["target_delay"] = 0
+            cmd = task["command"]
+        elif(task["target_type"] == "dynamic_target"):
+            task["command"] = RandomFourier(observation_dim)
+            task["target_delay"] = max(random.randint(-10, 30), 0)
+            cmd = task["command"](-task["target_delay"])
+        else:
+            raise Exception("Unknown target type: {}".format(target_type))
+        # Make sure that the initial states are not too far away from the target
+        for bloc in task["initial_states"]:
+            error = numpy.linalg.norm((cmd - task["ld_C"] @ bloc - task["ld_Y"]) * task["target_valid"])
+            error2 = numpy.linalg.norm(bloc)
+            if(error > 3.0 or error2 > 10.0):
+                is_valid_task = False
+                break
+            else:
+                is_valid_task = True
 
     return task
 
@@ -139,11 +147,11 @@ def LinearDSSamplerRandomDim(max_state_dim:int=16,
     max_observation_dim = min(max_observation_dim, state_dim * 3 // 2)
     action_dim = random.randint(min_action_dim, max_action_dim+1)
     observation_dim = random.randint(min_observation_dim, max_observation_dim + 1)
+
     return LinearDSSampler(state_dim=state_dim,
                 action_dim=action_dim, 
                 observation_dim=observation_dim,
                 seed=seed, verbose=verbose)
-
 
 def dump_linds_task(file, task):
     with open(file, 'wb') as f:

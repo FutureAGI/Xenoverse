@@ -11,6 +11,7 @@ import scipy.linalg as la
 from scipy import sparse
 import osqp
 import matplotlib.pyplot as plt
+from xenoverse.linds.task_sampler import dump_linds_task,load_linds_task
 
 class LTISystemMPC(object):
     """
@@ -24,17 +25,18 @@ class LTISystemMPC(object):
         self.Na = env.action_space.shape[0]
         self.Nx = env.state_dim  # state dimension
         self.Nu = env.action_dim  # action dimension
-        self.Ny = env.reward_dim  # optimize in reward dimension
+        self.Ny = env.observation_dim  # optimize in reward dimension
         self.A = env.ld_phi
         self.B = env.ld_gamma
-        self.C = env.reward_weight @ env.ld_C   # directly map observation to reward space
+        self.C = env.ld_C   # directly map observation to reward space
         self.X = env.ld_Xt.reshape(-1, 1)
-        self.Y = env.reward_weight @ env.ld_Y.reshape(-1, 1) + env.reward_bias.reshape(-1, 1)
+        self.Y = env.ld_Y.reshape(-1, 1)
         # MPC parameters
         self.K = K  # forward looking steps
         Q = np.diag(gamma ** np.arange(K))  # discount factor weights
-        P = np.eye(K) * env.action_cost / env.reward_factor  # action cost weights
-        self.W_Q = np.kron(Q, np.eye(self.Ny))
+        P = np.eye(K) * env.action_cost / max(env.reward_factor, 1.0e-6)  # action cost weights
+
+        self.W_Q = np.kron(Q, np.diag(env.target_valid))
         self.W_P = np.kron(P, np.eye(self.Nu))
         
         # constraints
@@ -93,15 +95,16 @@ class LTISystemMPC(object):
         """
         Reference trajectory can be shorter than K steps
         """
+        ref_trajectory = numpy.array(ref_trajectory)
         if(ref_trajectory.ndim == 1):
             Y_ref = np.kron(np.ones((self.K)), ref_trajectory[:self.Ny]).reshape(-1, 1)
         else:
             Y_ref = np.zeros((self.K * self.Ny, 1))
             for i in range(self.K):
                 if(ref_trajectory.shape[0] > i):
-                    Y_ref[self.Ny * i:self.Ny * (i + 1), 0] = ref_trajectory[i, :self.Ny].flatten()
+                    Y_ref[self.Ny * (self.K - i - 1):self.Ny * (self.K - i), 0] = ref_trajectory[i, :self.Ny].flatten()
                 else:
-                    Y_ref[self.Ny * i:self.Ny * (i + 1), 0] = ref_trajectory[-1, :self.Ny].flatten()
+                    Y_ref[self.Ny * (self.K - i - 1):self.Ny * (self.K - i), 0] = ref_trajectory[-1, :self.Ny].flatten()
         x = x_current.reshape(-1, 1)
 
         f = self.F1 @ x + self.F2 - Y_ref
@@ -127,33 +130,30 @@ def test_mpc(env, use_mpc=True, plot=False):
     T_sim = 400
     obs, info = env.reset()
     x_current = env._state
-    cmd = info["command"]
 
     error_history = []
     reward_history = []
     
     for t in range(T_sim):
         #action = env.action_space.sample()
+        cmd = env.get_future_inner_cmds(K=mpc.K)
         if(use_mpc is False):
             action = env.action_space.sample()
         else:
             action = mpc.solve(x_current, cmd)
 
         obs, reward, terminated, truncated, info = env.step(action)
-        cmd = info["command"]
-        #print("action:", action, "observation", obs, "command", cmd, "reward", reward)
 
-        error = np.linalg.norm(env.get_vector_reward_space(obs) - cmd)
-        error_history.append(error)
+        #print("Step {}, Obs {}, Act {}, State {}, Cmd {}, Target {}".format(t, obs, action, env._state, cmd, env.target_valid))
+
+        error_history.append(info["error"])
         reward_history.append(reward)
         x_current = env._state
 
         if terminated or truncated:
             obs, info = env.reset()
             x_current = env._state
-            u_current = np.zeros((mpc.Nu, 1))
-            cmd = info["command"]
-        
+                    
     if(plot):
         plt.figure(figsize=(12, 8))
         
@@ -172,9 +172,6 @@ def test_mpc(env, use_mpc=True, plot=False):
     
     tracking_error = np.mean(error_history)
     rewards = np.mean(reward_history)
-    if(tracking_error < 0.01):
-        print(cmd, task["reward_weight"], task["reward_dim"])
-        print(task["ld_B"])
 
     name = "MPC" if use_mpc else "Random"
     
@@ -185,12 +182,22 @@ if __name__ == "__main__":
     import gymnasium as gym
     import numpy
     from xenoverse.linds import LinearDSSamplerRandomDim
+    import argparse
 
-    task = LinearDSSamplerRandomDim()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--task", type=str, default=None)
+    args = parser.parse_args()
+    if(args.task is not None):
+        task = load_linds_task(args.task)
+    else:
+        task = LinearDSSamplerRandomDim()
+        dump_linds_task("./task.pkl", task)
+    task["action_cost"] = 0.0
     env = gym.make("linear-dynamics-v0-visualizer")
     env.set_task(task)
 
+    print("Task type:", task["target_type"])
     print("Start MPC solver demonstration...")
-    test_mpc(env, use_mpc=False)
-    test_mpc(env)
+    test_mpc(env, use_mpc=False, plot=True)
+    test_mpc(env, plot=True)
     print("...Test Passed")
