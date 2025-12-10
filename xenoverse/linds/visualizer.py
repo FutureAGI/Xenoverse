@@ -40,9 +40,10 @@ class LinearDSVisualizer(LinearDSEnv):
     def visualize_and_save(self, filename=None):
         tsne = TSNE(n_components=2, random_state=pseudo_random_seed(),
                     perplexity=10, max_iter=500, learning_rate=100)
-        if(filename is not None):
-            file_name = file_name
-        else:
+        # if(filename is not None):
+        #     file_name = file_name
+        # else:
+        if filename is None:
             file_name = "./linds_visualizer_output.pdf"
         obs_arr = numpy.array(self.observation_records, dtype="float32")
         act_arr = numpy.array(self.action_records, dtype="float32")
@@ -77,4 +78,4 @@ class LinearDSVisualizer(LinearDSEnv):
         scatter = plt.plot(numpy.arange(numpy.size(self.reward_records)), self.reward_records, c='red', alpha=0.2)
         scatter = plt.plot(numpy.arange(numpy.size(rewards_smooth)), rewards_smooth, c='red')
         plt.title("Reward", fontsize=12, fontweight='bold', color='blue', pad=10)
-        plt.savefig(file_name)
+        plt.savefig(filename)

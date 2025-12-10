@@ -122,10 +122,13 @@ class LinearDSEnv(gym.Env):
         else:
             for t in range(self.target_delay, -1, -1):
                 self._cmd_list.append(self.get_inner_cmd(-t))
-
+        obs = self.get_observation
+        cmd = self._cmd_list[-1]
+        error = numpy.linalg.norm((numpy.array(obs[:self.observation_dim]) - cmd) * self.target_valid)
         return self.get_observation, {"steps": self.steps, 
                                       "command": self.get_final_cmd(self._cmd_list[-1]), 
-                                      "command_type": self.target_type}
+                                      "command_type": self.target_type,
+                                      "error": error}
 
     def step(self, action):
         if(self.need_reset or not self.task_set):
