@@ -3,6 +3,7 @@ from numba import njit
 from numpy import random
 import secrets
 import string
+import pickle
 
 @njit(cache=True)
 def conv2d_numpy(input_data:numpy.ndarray, 
@@ -56,3 +57,13 @@ def generate_secure_strings(count, length=16):
     alphabet = string.ascii_letters + string.digits  # 62个字符
     return [''.join(secrets.choice(alphabet) for _ in range(length)) 
             for _ in range(count)]
+
+
+def dump_task(file, task):
+    with open(file, 'wb') as f:
+        pickle.dump(task, f)
+
+def load_task(file):
+    with open(file, 'rb') as f:
+        task = pickle.load(f)
+    return task

@@ -5,7 +5,7 @@ import numpy
 from numpy import random
 from numpy import linalg
 from copy import deepcopy
-from xenoverse.utils import pseudo_random_seed, weights_and_biases, RandomFourier
+from xenoverse.utils import pseudo_random_seed, weights_and_biases, RandomFourier, dump_task, load_task
 import pickle
 
 
@@ -153,15 +153,6 @@ def LinearDSSamplerRandomDim(max_state_dim:int=16,
                 observation_dim=observation_dim,
                 seed=seed, verbose=verbose)
 
-def dump_linds_task(file, task):
-    with open(file, 'wb') as f:
-        pickle.dump(task, f)
-
-def load_linds_task(file):
-    with open(file, 'rb') as f:
-        task = pickle.load(f)
-    return task
-
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
@@ -169,4 +160,4 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     task = LinearDSSamplerRandomDim()
-    dump_linds_task(args.output, task)
+    dump_task(args.output, task)

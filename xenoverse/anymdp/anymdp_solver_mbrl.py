@@ -16,9 +16,9 @@ class AnyMDPSolverMBRL(object):
         The exploration strategy is controlled by UCB-H with c as its hyperparameter. Increasing c will encourage exploration
         Simulation of the ideal policy when the ground truth is not known
         """
-        self.ns = env.observation_space.n
-        self.na = env.action_space.n
-
+        self.ns = env.ns
+        self.na = env.na
+        
         self.est_r = numpy.zeros((self.ns, self.na, self.ns))
         self.vis_cnt = 0.01 * numpy.ones((self.ns, self.na, self.ns))
         self.vis_cnt_sa = numpy.ones((self.ns, self.na))

@@ -2,6 +2,7 @@
 Any MDP Task Sampler
 """
 import numpy
+import scipy.sparse as sp
 from numpy import random
 from copy import deepcopy
 from xenoverse.utils import pseudo_random_seed
@@ -11,7 +12,7 @@ from xenoverse.anymdp.task_sampler_utils import sample_bandit, sample_mdp, sampl
 
 eps = 1e-10
 
-def AnyMDPTaskSampler(state_space:int=128,
+def AnyMDPTaskSampler(state_space:int=64,
                  action_space:int=5,
                  min_state_space:int=None,
                  seed=None,
@@ -45,7 +46,8 @@ def AnyMDPTaskSampler(state_space:int=128,
     task = {"ns": state_space,
             "na": action_space,
             "max_steps": max_steps,
-            "state_mapping": state_mapping}
+            "state_mapping": state_mapping,
+            "task_type": "MDP"}
     
     while(True):
         if(real_state_space == 1):
@@ -62,6 +64,58 @@ def AnyMDPTaskSampler(state_space:int=128,
 
     return task
 
+def AnyPOMDPTaskSampler(
+                 state_space:int=64,
+                 action_space:int=5,
+                 min_state_space:int=None,
+                 observation_space:int=64,
+                 density=0.20,
+                 maximum_distribution=4,
+                 seed=None,
+                 verbose=False):
+    
+    task = AnyMDPTaskSampler(state_space, action_space, min_state_space, seed, verbose)
+    task["no"] = observation_space
+    task["task_type"] = "POMDP"
+    real_states = task["state_mapping"].shape[0]
+    density = min(density, maximum_distribution / observation_space)
+    obs_mat=sp.random(real_states, observation_space, density=density, format='csr').toarray()
+    for i in range(real_states):
+        if(numpy.sum(obs_mat[i]) == 0):
+            obs_mat[i][random.randint(observation_space)] = 1
+        obs_mat[i] /= numpy.sum(obs_mat[i])
+    task["observation_transition"] = obs_mat
+    return task
+
+def MultiTokensAnyPOMDPTaskSampler(
+                 state_space:int=256,
+                 action_space:int=5,
+                 min_state_space:int=None,
+                 observation_space:int=64,
+                 observation_tokens:int=4,
+                 action_tokens:int=2,
+                 density=0.20,
+                 maximum_distribution=4,
+                 seed=None,
+                 verbose=False):
+    
+    task = AnyMDPTaskSampler(state_space, action_space, min_state_space, seed, verbose)
+    task["no"] = observation_space
+    task["do"] = observation_tokens
+    task["da"] = action_tokens
+    task["task_type"] = "MTPOMDP"
+    real_states = task["state_mapping"].shape[0]
+    task["observation_transition"] = []
+
+    for obs_tok in range(observation_tokens):
+        density = min(density, maximum_distribution / observation_space)
+        obs_mat=sp.random(real_states, observation_space, density=density, format='csr').toarray()
+        for i in range(real_states):
+            if(numpy.sum(obs_mat[i]) == 0):
+                obs_mat[i][random.randint(observation_space)] = 1
+            obs_mat[i] /= numpy.sum(obs_mat[i])
+        task["observation_transition"].append(obs_mat)
+    return task
 
 def GarnetTaskSampler(state_space:int=128,
                  action_space:int=5,
