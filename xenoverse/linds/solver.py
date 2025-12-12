@@ -11,7 +11,7 @@ import scipy.linalg as la
 from scipy import sparse
 import osqp
 import matplotlib.pyplot as plt
-from xenoverse.linds.task_sampler import dump_linds_task,load_linds_task
+from xenoverse.utils import dump_task, load_task
 
 class LTISystemMPC(object):
     """
@@ -188,10 +188,10 @@ if __name__ == "__main__":
     parser.add_argument("--task", type=str, default=None)
     args = parser.parse_args()
     if(args.task is not None):
-        task = load_linds_task(args.task)
+        task = load_task(args.task)
     else:
         task = LinearDSSamplerRandomDim()
-        dump_linds_task("./task.pkl", task)
+        dump_task("./task.pkl", task)
     task["action_cost"] = 0.0
     env = gym.make("linear-dynamics-v0-visualizer")
     env.set_task(task)

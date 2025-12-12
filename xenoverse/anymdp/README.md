@@ -1,6 +1,6 @@
 # Introduction
 
-Scalable procedurally generated Markov Decision Processes (MDPs) by randomizing the reward matrix and transition matrix. 
+Scalable, procedurally generated Markov Decision Processes (MDPs) and Partially Observable MDPs (POMDPs) are created by randomizing the reward matrix, transition matrix, and observation matrix. The library also supports POMDPs with multi-token observation and action spaces.
 
 # Download pre-generated datasets and tasks
 
@@ -52,6 +52,30 @@ You might resample a MDP task by keeping the transitions unchanged but sample a 
 from xenoverse.anymdp import Resampler
 new_task = Resampler(task)
 ```
+
+## New Features supporting POMDP and multi-token observation and action spaces (2025.12)
+```python
+    # Test POMDP Task Sampler
+    task = AnyPOMDPTaskSampler(state_space=16, 
+                            action_space=5,
+                            min_state_space=None,
+                            observation_space=16,
+                            density = 0.1,
+                            verbose=True)
+
+    # Test Multi-token POMDP Task Sampler
+    # Observation space = MultiDiscrete(observation_tokens)
+    # Action space = MultiDiscrete(action_tokens)
+    task = MultiTokensAnyPOMDPTaskSampler(state_space=128, 
+                            action_space=5,
+                            min_state_space=None,
+                            observation_space=128,
+                            observation_tokens=4,
+                            action_tokens=2,
+                            density = 0.2,
+                            verbose=True)
+```
+Note that the entry point `env.set_task` is the same for MDP, POMDP, and multi-token POMDP. However, the files `anymdp_solver_mbrl.py` and `anymdp_solver_q.py` are not available for POMDP and multi-token POMDP tasks, while `anymdp_solver_opt.py` is available for all three types of tasks. We provide `test_ppo.py` for demonstration of PPO training on POMDP and multi-token POMDP tasks.
 
 ## Running the built-in MDP solver
 ```python

@@ -12,8 +12,9 @@ class AnyMDPSolverQ(object):
         Simulation of the ideal policy when the ground truth is not known
         """
         self.env = env
-        self.na = env.action_space.n
-        self.ns = env.observation_space.n
+        self.na = env.na
+        self.ns = env.ns
+        assert env.task_type=="MDP", "The solver only works for MDP"
         self.value_matrix = numpy.zeros((self.ns, self.na)) + 1.0/(1.0 - gamma)
         self.sa_visitied = numpy.ones((self.ns, self.na))
         self.s_visitied = numpy.ones((self.ns,))

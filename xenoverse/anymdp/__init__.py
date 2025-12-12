@@ -18,6 +18,7 @@ from xenoverse.anymdp.anymdp_solver_opt import AnyMDPSolverOpt
 from xenoverse.anymdp.anymdp_solver_mbrl import AnyMDPSolverMBRL
 from xenoverse.anymdp.anymdp_solver_q import AnyMDPSolverQ
 from xenoverse.anymdp.task_sampler import AnyMDPTaskSampler, GarnetTaskSampler
+from xenoverse.anymdp.task_sampler import AnyPOMDPTaskSampler, MultiTokensAnyPOMDPTaskSampler
 from xenoverse.anymdp.visualizer import anymdp_task_visualizer
 
 register(

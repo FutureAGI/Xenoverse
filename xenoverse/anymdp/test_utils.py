@@ -3,8 +3,8 @@ from xenoverse.anymdp import  AnyMDPSolverOpt, AnyMDPSolverMBRL, AnyMDPSolverQ
 
 class RandomAgent:
     def __init__(self, env):
-        self.na = env.action_space.n
-        self.ns = env.observation_space.n
+        self.na = env.na
+        self.ns = env.ns
         self.action_space = env.action_space
 
     def policy(self, state, is_test=False):

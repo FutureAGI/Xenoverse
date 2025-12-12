@@ -32,15 +32,25 @@ class AnyMDPEnv(gym.Env):
     def set_task(self, task_config):
         for k,v in task_config.items():
             setattr(self, k, v)
+        if(self.task_type=="MDP"):
+            self.no = self.ns
+            self.observation_space = spaces.Discrete(self.ns)
+            self.action_space = spaces.Discrete(self.na)
+        elif(self.task_type=="POMDP"):
+            self.observation_space = spaces.Discrete(self.no)
+            self.action_space = spaces.Discrete(self.na)
+        elif(self.task_type=="MTPOMDP"):
+            self.observation_space = spaces.MultiDiscrete([self.no] * self.do)
+            self.action_space = spaces.MultiDiscrete([self.na] * self.da)
+        else:
+            raise NotImplementedError(f"Unknown task type: {self.task_type}")
 
         assert self.transition.shape == self.reward.shape
         assert self.transition.shape[0] == len(self.state_mapping) and self.transition.shape[1] == self.na
 
         assert self.ns > 0, "State space must be at least 1"
         assert self.na > 1, "Action space must be at least 2"
-
-        self.observation_space = spaces.Discrete(self.ns)
-        self.action_space = spaces.Discrete(self.na)
+        assert self.no > 0, "Observation space must be at least 1"
 
         # inverse mapping from observation to inner state
         self.obs2inner = list(range(self.ns))
@@ -77,14 +87,15 @@ class AnyMDPEnv(gym.Env):
         random.seed(pseudo_random_seed())
 
         self._state = numpy.random.choice(self.s_0, p=self.s_0_prob)
-        return int(self.state_mapping[self._state]), {"steps": self.steps}
+        return self.get_observation, {"steps": self.steps}
 
-    def step(self, action):
+    def single_step(self, action):
         if(self.need_reset or not self.task_set):
             raise Exception("Must \"set_task\" and \"reset\" before doing any actions")
         if(self._state in self.s_e and self.ns > 1):
-            raise Exception(f"Unexpected Error: Given an ended state: {self.inner_state()}")
-        assert action < self.na, "Action must be less than the number of actions"
+            raise Exception(f"Unexpected Error: given an terminated state")
+        assert action < self.na, f"Action {action} is out of range"
+
         transition_gt = numpy.copy(self.transition[self._state, action])
         next_state = random.choice(len(self.state_mapping), p=transition_gt)
 
@@ -93,17 +104,32 @@ class AnyMDPEnv(gym.Env):
         reward_gt_noise = self.reward_noise[self._state, action, next_state]
         reward = random.normal(reward_gt, reward_gt_noise)
 
-        info = {"steps": self.steps, "reward_gt": reward_gt}
-        info["transition_gt"] = self.transition_obs[self.state, action]
-
-        self.steps += 1
         self._state = next_state
         terminated = (self._state in self.s_e) or (self.ns < 2)
-        truncated = self.steps >= self.max_steps
 
-        if(terminated or truncated):
-            self.need_reset = True
-        return int(self.state_mapping[next_state]), reward, terminated, truncated, info
+        return reward_gt, reward, terminated
+    
+    def step(self, action):
+        self.steps += 1
+        truncated = self.steps >= self.max_steps
+        terminated = False
+        if(numpy.ndim(action) >= 1):
+            assert numpy.shape(action) == (self.da,), f"Action {action} is out of range"
+            rewards = 0
+            rewards_gt = 0
+            for act in action:
+                reward_gt, reward, term = self.single_step(act)
+                rewards += reward
+                rewards_gt += reward_gt
+                if(term):
+                    terminated=True
+                    break
+        else:
+            rewards_gt, rewards, terminated = self.single_step(action)
+        info = {"steps": self.steps, "reward_gt": rewards_gt}
+        info["transition_gt"] = self.transition_obs[self.state, action]
+
+        return self.get_observation, rewards, terminated, truncated, info
     
     @property
     def state(self):
@@ -115,6 +141,22 @@ class AnyMDPEnv(gym.Env):
             return int(self._state)
         else:
             return int(self.obs2inner[query_state])
+        
+    @property
+    def get_observation(self):
+        if(self.task_type == "MDP"):
+            return int(self.state_mapping[self._state])
+        elif(self.task_type == "MTPOMDP"):
+            toks = []
+            for ot in self.observation_transition:
+                probs = ot[self._state]
+                toks.append(random.choice(self.no, p=probs))
+            return numpy.array(toks, dtype=int)
+        elif(self.task_type == "POMDP"):
+            probs = self.observation_transition[self._state]
+            return random.choice(self.no, p=probs)
+        else:
+            raise NotImplementedError
     
     def get_gt_transition(self):
         return self.transition_obs
