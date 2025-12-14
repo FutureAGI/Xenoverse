@@ -13,7 +13,7 @@ def pseudo_random_seed(hyperseed=0):
     timestamp = time.time_ns()
     system_random = int(sysrnd.random() * 100000000)
     pseudo_random = timestamp + system_random + hyperseed
-    numpy.random.seed(pseudo_random % (4294967296))
+    numpy.random.seed(pseudo_random % (4294967295))
     
 def gen_uniform_matrix(n_in, n_out):
     w = random.normal(size=[n_out, n_in])
