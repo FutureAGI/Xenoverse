@@ -18,7 +18,7 @@ def HVACTaskSampler(control_type='Temperature',
     cell_volume = floor_height * cell_size * cell_size # volume of each cell
 
     chtc_array = numpy.random.uniform(1.5, 25.0, size=(nw + 1, nl + 1, 2)) # Convective Heat Transfer Coefficients
-    hc_array = numpy.random.uniform(1000, 4000, size=(nw, nl)) * cell_volume # heat capacity inside the building
+    hc_array = numpy.random.uniform(1.3, 2.0, size=(nw, nl)) * cell_volume # heat capacity inside the building
     wall_chtc = rnd.uniform(1.5, 3.0)
     chtc_array[0, :, 0] = wall_chtc
     chtc_array[nw, :, 0] = wall_chtc
@@ -32,7 +32,6 @@ def HVACTaskSampler(control_type='Temperature',
     n_coolers = max(int(area * rnd.uniform(0.05, 0.15)), 1)
 
     eps = rnd.uniform(0.0, 1.0)
-
         
     if(eps < 0.2):
         t_ambient = rnd.uniform(-10, 20) # ambient temperature
@@ -55,7 +54,7 @@ def HVACTaskSampler(control_type='Temperature',
         heater = HeaterUnc(nw, nl, cell_size, cell_walls, min_dist=1.2, avoidance=equipments, base_heater=base_heater)
         timer.append(heater.period)
         equipments.append(heater)
-        hc_array[equipments[-1].nloc[0], equipments[-1].nloc[1]] += rnd.uniform(20000, 80000)
+        hc_array[equipments[-1].nloc[0], equipments[-1].nloc[1]] += rnd.uniform(200, 400)
     for i in range(n_coolers):
         coolers.append(Cooler(nw, nl, cell_size, cell_walls, min_dist=min(cell_size, 2.0),
                     avoidance=coolers,
