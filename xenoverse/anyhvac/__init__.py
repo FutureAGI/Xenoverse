@@ -1,5 +1,5 @@
 from gymnasium.envs.registration import register
-from xenoverse.anyhvac.anyhvac_env import HVACEnv
+from xenoverse.anyhvac.anyhvac_env import HVACEnv, HVACEnvDiscreteAction, HVACEnvDiffAction
 from xenoverse.anyhvac.anyhvac_env_vis import HVACEnvVisible
 
 register(

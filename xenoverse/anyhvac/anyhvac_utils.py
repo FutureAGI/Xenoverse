@@ -40,8 +40,10 @@ class BaseNodes(object):
         self.nloc = self.cloc.astype(int)
 
     def __repr__(self):
-        return f"{type(self).__name__}({self.loc[0]:.1f},{self.loc[1]:.1f})\n"
-
+        res_str = f"{type(self).__name__}({self.loc[0]:.1f},{self.loc[1]:.1f})\n"
+        for key, val in self.__dict__.items():
+            res_str += f"  {key}: {val}\n"
+        return res_str
 
 class BaseSensor(BaseNodes):
     def __init__(self, *args, **kwargs):
@@ -169,8 +171,8 @@ class HeaterUnc(BaseVentilator):
             self.period = rnd.randint(*kwargs["period_range"])
             self.period = self.period * 60
         else:
-            self.period = rnd.randint(HEAT_SOURCE_PERIOD_RANGE_LOW, 
-                                      HEAT_SOURCE_PERIOD_RANGE_HIGH)  # period of the heat source 
+            self.period = rnd.randint(HEAT_SOURCE_PERIOD_RANGE_LOW * 60, 
+                                      HEAT_SOURCE_PERIOD_RANGE_HIGH * 60)  # period of the heat source 
             self.period = self.period * 60
         if("heat_variant_scale" in kwargs):
             self.heat_variant_scale = rnd.uniform(*kwargs["heat_variant_scale"])
@@ -216,7 +218,7 @@ class Cooler(BaseVentilator):
         self.temp_diff_decay_ub = rnd.uniform(COOLER_DIFF_DECAY_UB_LOW, COOLER_DIFF_DECAY_UB_HIGH)
         self.temp_diff_decay_lb = rnd.uniform(COOLER_DIFF_DECAY_LB_LOW, COOLER_DIFF_DECAY_LB_HIGH)
 
-        self.max_cooling_power = COOLER_MAX_COOLING_POWER
+        self.max_cooling_power = rnd.uniform(COOLER_MAX_COOLING_POWER_LOW, COOLER_MAX_COOLING_POWER_HIGH)
         self.power_vent_min = rnd.uniform(COOLER_POWER_VENT_MIN_LOW, COOLER_POWER_VENT_MIN_HIGH)
         self.min_cooling_power = self.power_vent_min
         if (rnd.random() < COOLER_VENT_FIXED_RATIO_FACTOR):
@@ -226,14 +228,12 @@ class Cooler(BaseVentilator):
             self.power_vent_min = rnd.uniform(COOLER_VENT_FIXED_POWER_LOW, COOLER_VENT_FIXED_POWER_HIGH)  # fixed ventilator power
 
         # drift of return sensors
-        period = rnd.randint(DEVICE_SENSOR_DRIFT_PERIOD_LOW * 60,
-                             DEVICE_SENSOR_DRIFT_PERIOD_HIGH * 60)
-        self.drift_periodical = RandomFourier(ndim=1, 
-                                              max_order=DEVICE_SENSOR_DRIFT_FOURIER_MAX_ORDER, 
-                                              max_item=DEVICE_SENSOR_DRIFT_FOURIER_MAX_ITEMS, 
-                                              max_steps=period,
-                                              box_size=min(rnd.exponential(scale=DEVICE_SENSOR_DRIFT_MEAN),
-                                                           DEVICE_SENSOR_DRIFT_UPPER_BOUND))
+        max_bound = min(32 - kwargs["target_temperature"] - 2, 6)
+        min_bound = -max_bound
+        cooler_sensor_dift_std = kwargs["cooler_sensor_dift_std"]
+        self.cooler_sensor_drift = RealisticSensorNoise(gaussian_std=cooler_sensor_dift_std,
+                                                        min_bound=min_bound, 
+                                                        max_bound=max_bound)
         
     def set_control_type(self, control_type):
         self.control_type = control_type
@@ -242,6 +242,7 @@ class Cooler(BaseVentilator):
     def temperature_control(self, switch, value, t, building_state=None, ambient_state=None):
         # calculate the return temperature as the target for control
         env_temp = self.calc_return_temperature(building_state, t)
+        self.return_temperature = env_temp
         if switch == 0:
             return super().step(0, 0, t, building_state=building_state, ambient_state=ambient_state)
 
@@ -301,9 +302,12 @@ class Cooler(BaseVentilator):
                      + vdd * k[0] * k[1])
         
         # Add temperature drifting to return temperature measure
-        drift_t = self.drift_periodical(t)[0]
+        noise_t = self.cooler_sensor_drift(t,gt_t)
 
-        return gt_t + drift_t
+        return noise_t
+    
+    def reset(self):
+        self.cooler_sensor_drift.reset()
 
 def wind_diffuser(cell_wall, src, cell_size, sigma):
     # 空气扩散计算
@@ -357,3 +361,125 @@ def wind_diffuser(cell_wall, src, cell_size, sigma):
 
     diffuse_mat /= numpy.sum(diffuse_mat)  # 归一化
     return diffuse_mat, diffuse_wall
+
+class RealisticSensorNoise:
+    """
+    真实传感器噪声生成器（带延迟和平滑）
+    
+    物理模型：
+    - 传输延迟：30-120秒（队列）
+    - 热惯性：一阶低通滤波（时间常数 = 延迟时间/3）
+    - 基础偏差：固定偏移
+    
+    实际数据特征：
+    - 左侧真值变化快（30秒步长）
+    - 右侧读数变化缓慢平滑
+    - 有明显延迟和惯性
+    """
+    
+    def __init__(self, 
+                 gaussian_mean=0.5, 
+                 gaussian_std=1.5, 
+                 min_bound=-6.0, 
+                 max_bound=6.0,
+                 sign_positive_prob=0.65,
+                 delay_range=(5, 30)):
+        """
+        参数:
+            gaussian_mean: 正态分布均值
+            gaussian_std: 正态分布标准差
+            min_bound: 拒绝采样最小边界
+            max_bound: 拒绝采样最大边界
+            sign_positive_prob: 正值概率
+            delay_range: 延迟范围（秒），(min, max)
+        """
+        self.min_bound = min_bound
+        self.max_bound = max_bound
+        self.sign_positive_prob = sign_positive_prob
+        
+        # 1. 生成基础偏差（通过拒绝采样）
+        rejection_count = 0
+        while True:
+            sample = rnd.normal(gaussian_mean, gaussian_std)
+            if min_bound <= sample <= max_bound:
+                if rnd.random() < sign_positive_prob:
+                    self.base_bias = abs(sample)
+                else:
+                    self.base_bias = -abs(sample)
+                break
+            rejection_count += 1
+        
+        # 2. 生成随机延迟
+        self.delay_seconds = rnd.uniform(*delay_range)
+        
+        # 3. 计算滤波器系数（时间常数 = 延迟/3）
+        self.time_constant = self.delay_seconds / 3.0  # 经验值
+        
+        # 4. 初始化状态
+        self.input_queue = []          # 输入队列（延迟用）
+        self.last_output = None
+        self.step_count = 0
+        self.last_call_time = None
+        self.total_time_elapsed = 0.0
+    
+    def __call__(self, t, true_temperature):
+        """
+        获取时刻 t 的传感器读数
+        
+        参数:
+            t: 时间步
+            true_temperature: 真实温度值
+            
+        返回:
+            float: 传感器读数（延迟 + 平滑）
+        """
+        # 计算与上次调用的时间间隔
+        if self.last_call_time is None:
+            dt = 0.0
+        else:
+            dt = t - self.last_call_time
+
+        if self.last_output is None:
+            self.last_output = true_temperature + self.base_bias
+        
+        self.last_call_time = t
+        self.total_time_elapsed += dt
+        
+        # 计算当前输入（真值 + 基础偏差）
+        current_input = true_temperature + self.base_bias
+        
+        # 将输入加入时间戳队列
+        self.input_queue.append((t, current_input))
+        
+        # 清理过期的队列数据（超过延迟时间）
+        cutoff_time = t - self.delay_seconds
+        while len(self.input_queue) > 0 and self.input_queue[0][0] < cutoff_time:
+            self.input_queue.pop(0)
+        
+        # 获取延迟后的输入（队列头部）
+        if len(self.input_queue) > 0:
+            delayed_input = self.input_queue[0][1]
+        else:
+            delayed_input = current_input
+        
+        # 一阶低通滤波（使用实际时间间隔）
+        if dt > 0:
+            # 计算滤波系数：α = exp(-dt / τ)
+            alpha = np.exp(-dt / self.time_constant)
+        else:
+            alpha = 1.0  # 如果是第一次调用，不滤波
+        
+        # 应用滤波
+        output = alpha * self.last_output + (1 - alpha) * delayed_input
+        
+        # 更新状态
+        self.last_output = output
+        
+        return output
+    
+    def reset(self):
+        """重置传感器状态"""
+        self.input_queue = []
+        self.last_output = 0.0
+        self.last_call_time = None
+        self.total_time_elapsed = 0.0

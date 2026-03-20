@@ -2,6 +2,7 @@ if __name__ == "__main__":
     import numpy as np
     import pickle 
     import time
+    import sys
     from xenoverse.anyhvac.anyhvac_env_vis import HVACEnvVisible, HVACEnv
     from xenoverse.anyhvac.anyhvac_sampler import HVACTaskSampler
     from xenoverse.anyhvac.anyhvac_solver import HVACSolverGTPID
@@ -26,6 +27,7 @@ if __name__ == "__main__":
 
     print("... Finished Sampling")
     env.set_task(task)
+
     terminated, truncated = False,False
     obs, info = env.reset()
 
@@ -34,7 +36,7 @@ if __name__ == "__main__":
         if pid_type == "temperarure":
             action = env._pid_action()
         elif pid_type == "HVACSolverGTPID":
-            action = agent.policy(obs)
+            action = agent.policy(obs["sensor_readings"])
             if action.shape != env.action_space.shape:
                 print(f"Warning: Action shape from agent ({action.shape}) does not match env action space shape ({env.action_space.shape}).")
                
