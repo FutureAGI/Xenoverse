@@ -9,7 +9,9 @@ from sb3_contrib import RecurrentPPO
 from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3.common.vec_env import DummyVecEnv
 from stable_baselines3.common.monitor import Monitor
-from typing import Union, Type
+from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
+from stable_baselines3.common.preprocessing import get_flattened_obs_dim
+from typing import Union, Type, Optional
 
 class HVACRLTrainer:
     def __init__(
@@ -18,7 +20,7 @@ class HVACRLTrainer:
         algorithm: str = "ppo", 
         stage_steps: int = 10000,
         n_envs: int = 4,
-        vec_env_type: str = "dummy",
+        vec_env_type: str = "subproc",
         vec_env_args: dict = None,
         verbose: int = 1,
         device: str = "auto",
@@ -96,12 +98,37 @@ class HVACRLTrainer:
         }
         
         if self.algorithm == "rppo":
+            n_steps = 128
+            batch_size = int(n_steps * self.n_envs / 4)
+
             print("Use RecurrentPPO!")
+
             return RecurrentPPO(
-                batch_size= int(32 * self.n_envs / 4),
-                n_steps= 32,
+                batch_size= batch_size,
+                n_steps= n_steps,
+                gamma=0.95,
+                gae_lambda=0.90,
+                # 降低学习率：原默认一般3e-4，减半到1.5e-4（若你原lr是其他值，按1/2~1/3调整）
+                learning_rate=1.5e-4,
+                clip_range=0.15,
+                policy_kwargs = {
+                    "net_arch": {
+                        "pi": [512, 256],      # 两层 MLP
+                        "vf": [512, 256],
+                    },
+                    "features_extractor_class": NormalizedCombinedExtractor,
+                    "lstm_hidden_size": 512,      
+                    "n_lstm_layers": 1,         
+                    "shared_lstm": False,         # 独立 LSTM
+                    "enable_critic_lstm": True,   # Critic 也有 LSTM
+                    "lstm_kwargs": {
+                        "dropout": 0.0,  # 可选：防止过拟合
+                    },
+                    "activation_fn": torch.nn.ReLU,
+                },
                 **common_params
             )
+        
         elif self.algorithm == "ppo":
             print("Use PPO!")
             return PPO(
@@ -182,7 +209,6 @@ class TrainingLoggerCallback(BaseCallback):
         current_action = self.model.env.get_attr("current_action")[0]
         self.current_stage.append(self.locals["rewards"][0])
         info = self.locals["infos"][0]
-        self.current_info.append(info)
         self.current_overheat.append(info["over_heat"])
         self.current_over_tolerace.append(info["over_tolerace"])
 
@@ -293,13 +319,207 @@ class HVACRLTester:
         
         return action
     
+    def predict_with_distribution(
+        self, 
+        obs: Union[np.ndarray, dict[str, np.ndarray]], 
+        state: Optional[tuple[np.ndarray, ...]] = None,
+        episode_start: Optional[np.ndarray] = None,
+        deterministic: bool = False
+    ) -> tuple[np.ndarray, dict, tuple]:
+        """
+        预测动作并返回动作分布信息（支持循环策略）
+        """
+
+        # 1. 设置模型为评估模式
+        self.model.policy.set_training_mode(False)
+        
+        # 2. 转换 observation 为 tensor
+        observation, vectorized_env = self.model.policy.obs_to_tensor(obs)
+        
+        # 3. 确定 batch size
+        if isinstance(observation, dict):
+            n_envs = observation[next(iter(observation.keys()))].shape[0]
+        else:
+            n_envs = observation.shape[0]
+        
+        # 4. 准备 LSTM 状态
+        if state is None:
+            state = np.concatenate([np.zeros(self.model.policy.lstm_hidden_state_shape) for _ in range(n_envs)], axis=1)
+            state = (state, state)
+        
+        if episode_start is None:
+            episode_start = np.array([False for _ in range(n_envs)])
+        
+        # 5. 转换为 torch tensor
+        with torch.no_grad():
+            states = (
+                torch.tensor(state[0], dtype=torch.float32, device=self.model.device),
+                torch.tensor(state[1], dtype=torch.float32, device=self.model.device)
+            )
+            episode_starts = torch.tensor(episode_start, dtype=torch.float32, device=self.model.device)
+            
+            # 6. 获取分布
+            distribution, new_states = self.model.policy.get_distribution(
+                observation, 
+                lstm_states=states, 
+                episode_starts=episode_starts
+            )
+            
+            # 7. 获取动作
+            actions_raw = distribution.get_actions(deterministic=deterministic)
+            
+            # 8. 提取分布信息
+            distribution_info = self._extract_distribution_info(distribution)
+            
+            # 9. 转换为 numpy
+            actions = actions_raw.cpu().numpy()
+            new_states = (new_states[0].cpu().numpy(), new_states[1].cpu().numpy())
+            
+            # 10. 根据动作空间类型进行后处理
+            if isinstance(self.model.action_space, gym.spaces.Box):
+                # 处理连续动作空间
+                if self.model.policy.squash_output:
+                    actions = self.model.policy.unscale_action(actions)
+                else:
+                    actions = np.clip(actions, self.model.action_space.low, self.model.action_space.high)
+                
+            elif isinstance(self.model.action_space, gym.spaces.MultiDiscrete):
+                # 处理 MultiDiscrete 动作空间
+                # 确保动作是整数类型
+                if actions.dtype != np.int32 and actions.dtype != np.int64:
+                    actions = actions.astype(np.int32)
+                
+                # 验证动作在合法范围内（可选，用于调试）
+                nvec = self.model.action_space.nvec
+                if np.any(actions < 0) or np.any(actions >= nvec):
+                    print(f"[WARNING] 动作超出范围!")
+                    print(f"  - 合法范围: [0, {nvec})")
+                    print(f"  - 实际 min: {np.min(actions)}, max: {np.max(actions)}")
+                    # 裁剪到合法范围
+                    actions = np.clip(actions, 0, nvec - 1)
+
+                    
+            elif isinstance(self.model.action_space, gym.spaces.Discrete):
+                # 处理 Discrete 动作空间
+                # 确保是整数
+                if actions.ndim > 0:
+                    actions = actions.flatten()
+                actions = actions.astype(np.int32)
+                
+            else:
+                print(f"[DEBUG] 不支持的 action_space 类型: {type(self.model.action_space)}，跳过处理")
+            
+            # 11. 处理非向量化环境
+            if not vectorized_env:
+                actions = actions.squeeze(axis=0)
+                new_states = (new_states[0].squeeze(axis=1), new_states[1].squeeze(axis=1))
+            
+            return actions, distribution_info, new_states
+        
+    def _extract_distribution_info(self, distribution):
+        """
+        从分布对象中提取信息（支持连续、离散和 MultiDiscrete 动作空间）
+        
+        返回:
+            dict: 包含分布参数和统计信息
+        """
+         
+        info = {}
+        
+        # 检查是否有 distribution 属性
+        if hasattr(distribution, 'distribution'):
+            inner_distribution = distribution.distribution
+
+            # 检查是否是列表/元组（MultiCategorical 的情况）
+            if isinstance(inner_distribution, (list, tuple)):
+                if len(inner_distribution) > 0:
+                    print(f"    - 第一个分布类型: {type(inner_distribution[0])}")
+                
+                info['type'] = 'multi_categorical'
+                info['probs'] = []
+                info['logits'] = []
+                info['entropy'] = []
+                
+                # 遍历每个维度的分布
+                for i, dist in enumerate(inner_distribution):
+                
+                    if hasattr(dist, 'probs') and hasattr(dist, 'logits'):
+                        probs = dist.probs.cpu().numpy()
+                        logits = dist.logits.cpu().numpy()
+                        entropy = dist.entropy().cpu().numpy()
+                        
+                        info['probs'].append(probs)
+                        info['logits'].append(logits)
+                        info['entropy'].append(entropy)
+                    else:
+                        print(f"      [WARNING] 第 {i} 个分布没有 probs 或 logits 属性")
+                
+                # 转换为数组
+                info['probs'] = np.array(info['probs'], dtype=object)
+                info['logits'] = np.array(info['logits'], dtype=object)
+                info['entropy'] = np.array(info['entropy'])
+                info['total_entropy'] = np.sum(info['entropy'])
+
+                
+            else:
+                # 单个分布
+                # 对于连续动作（高斯分布）
+                if hasattr(inner_distribution, 'loc') and hasattr(inner_distribution, 'scale'):
+                    print(f"  [INFO] 检测到 Gaussian 分布")
+                    info['type'] = 'gaussian'
+                    info['mean'] = inner_distribution.loc.cpu().numpy()
+                    info['std'] = inner_distribution.scale.cpu().numpy()
+                    info['log_std'] = torch.log(inner_distribution.scale).cpu().numpy()
+                    
+                    # 计算熵
+                    info['entropy'] = distribution.entropy().cpu().numpy()
+                    
+                # 对于离散动作（Categorical分布）
+                elif hasattr(inner_distribution, 'probs'):
+                    info['type'] = 'categorical'
+                    info['probs'] = inner_distribution.probs.cpu().numpy()
+                    info['logits'] = inner_distribution.logits.cpu().numpy()
+                    
+                    # 计算熵
+                    info['entropy'] = distribution.entropy().cpu().numpy()
+        
+        else:
+            print(f"  [WARNING] distribution 对象没有 'distribution' 属性")
+            print(f"    - 可用属性: {[attr for attr in dir(distribution) if not attr.startswith('_')]}")
+        
+        return info
+
     def reset(self):
         if self.algorithm == "rppo":
             self._episode_start = True
             self._last_lstm_states = None
 
     
-
+class NormalizedCombinedExtractor(BaseFeaturesExtractor):
+    def __init__(self, observation_space, **kwargs):
+        super().__init__(observation_space, features_dim=1)
+        
+        extractors = {}
+        total_concat_size = 0
+        
+        for key, subspace in observation_space.spaces.items():
+            dim = get_flattened_obs_dim(subspace)
+            
+            # 所有向量观测都加 LayerNorm
+            extractors[key] = torch.nn.Sequential(
+                torch.nn.Flatten(),
+                torch.nn.LayerNorm(dim)  # ✅ 解决尺度失衡
+            )
+            total_concat_size += dim
+        
+        self.extractors = torch.nn.ModuleDict(extractors)
+        self._features_dim = total_concat_size
+    
+    def forward(self, obs):
+        encoded = []
+        for key, extractor in self.extractors.items():
+            encoded.append(extractor(obs[key]))
+        return torch.cat(encoded, dim=1)
 
 class MySB3CompatibleEnv(gym.Env):
     def __init__(self, config=None):
