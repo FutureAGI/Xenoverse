@@ -140,6 +140,7 @@ class HVACEnv(gym.Env):
         # calculate average total heat
         if not generate_task:
             self.avg_total_heat = self._calculate_average_total_heat(time_step_interval=30, max_time=604800)
+            print(f"Average total heat: {self.avg_total_heat}")
         else:
             self.avg_total_heat = 10000
 
@@ -167,7 +168,7 @@ class HVACEnv(gym.Env):
         time_steps = np.arange(0, max_time, time_step_interval)
         total_heat_sum = 0.0
         
-        for t in time_steps[:10]:
+        for t in time_steps:
             # 计算当前时刻所有设备的总发热量
             step_heat = sum(equipment(t)["heat"] for equipment in self.equipments)
             total_heat_sum += step_heat
