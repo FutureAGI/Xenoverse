@@ -17,7 +17,6 @@ if __name__ == "__main__":
         with open(TASK_CONFIG_PATH, "rb") as f:
             task = pickle.load(f)
         print(f"Loaded existing task config from {TASK_CONFIG_PATH}")
-    
     except FileNotFoundError:
         print("Sampling new HVAC tasks...")
         task = HVACTaskSampler(control_type='Temperature')
@@ -29,9 +28,9 @@ if __name__ == "__main__":
     env.set_task(task)
     terminated, truncated = False,False
     obs, info = env.reset()
+
     agent = HVACSolverGTPID(env)
     while (not terminated) and (not truncated):
-
         if pid_type == "temperarure":
             action = env._pid_action()
         elif pid_type == "HVACSolverGTPID":

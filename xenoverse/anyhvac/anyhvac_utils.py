@@ -3,6 +3,7 @@ import numpy
 import numpy as np
 from numpy import random as rnd
 from xenoverse.utils import RandomFourier
+from .hvac_config import *
 
 class BaseNodes(object):
     def __init__(self, nw, nl, cell_size, cell_walls,
@@ -46,13 +47,15 @@ class BaseSensor(BaseNodes):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # period of the sensor noise drift
-        period = rnd.randint(100000, 300000000)  
-        # drift of the temperature
+        period = rnd.randint(SENSOR_DRIFT_PERIOD_LOW * 60,
+                             SENSOR_DRIFT_PERIOD_HIGH * 60)  
+        # drift of the sensor reading, simulating the sensor drift in real world, with a random period and scale
         self.drift_periodical = RandomFourier(ndim=1, 
-                                              max_order=3, 
-                                              max_item=3, 
+                                              max_order=SENSOR_DRIFT_FOURIER_MAX_ORDER, 
+                                              max_item=SENSOR_DRIFT_FOURIER_MAX_ITEMS, 
                                               max_steps=period,
-                                              box_size=rnd.uniform(0.05, 0.5))
+                                              box_size=min(rnd.exponential(scale=SENSOR_DRIFT_MEAN),
+                                                           SENSOR_DRIFT_UPPER_BOUND))
 
     def __call__(self, state, t):
         # 计算单元格内中心偏移量
@@ -98,22 +101,22 @@ class BaseVentilator(BaseNodes):
 
         self.wall_offset = numpy.array([[-0.5, 0], [0, -0.5]])  # 墙相对位置
 
-        self.power_eff_vent = rnd.uniform(0.5, 1.0)  # 功率效率
-        self.cooler_eer_base = rnd.uniform(2.0, 5.0)  # cooler effect
-        self.cooler_eer_decay_start = rnd.uniform(8.0, 15.0)  # 制冷效率衰减起点
-        self.cooler_eer_zero_point = rnd.uniform(16, 24)  # 制冷效率为0的点
-        self.cooler_eer_reverse = rnd.uniform(5.0, 10.0)  # 随机生成一个介于 5.0 和 10.0 之间的浮动值，表示当温度差为负时的冷却效率。
+        self.power_eff_vent = rnd.uniform(COOLER_VENT_EFFICIENCY_LOW, COOLER_VENT_EFFICIENCY_HIGH)  # 功率效率
+        self.cooler_eer_base = rnd.uniform(COOLER_EER_BASE_LOW, COOLER_EER_BASE_HIGH)  # cooler effect
+        self.cooler_eer_decay_start = rnd.uniform(COOLER_EER_DECAY_START_HIGH, COOLER_EER_DECAY_START_HIGH)  # 制冷效率衰减起点
+        self.cooler_eer_zero_point = rnd.uniform(COOLER_EER_ZERO_POINT_LOW, COOLER_EER_ZERO_POINT_HIGH)  # 制冷效率为0的点
+        self.cooler_eer_reverse = rnd.uniform(COOLER_EER_REVERSE_LOW, COOLER_EER_REVERSE_HIGH)  # 随机生成一个介于 5.0 和 10.0 之间的浮动值，表示当温度差为负时的冷却效率。
 
         # Impact Range
-        self.cooler_decay = rnd.uniform(1.0, 4.0)
-        self.heat_decay = rnd.uniform(0.5, 1.0)
+        self.cooler_diffuse_sigma = rnd.uniform(COOLER_SPACE_INSTANT_DIFFUSION_LOW, COOLER_SPACE_INSTANT_DIFFUSION_HIGH)
+        self.heat_diffuse_sigma = rnd.uniform(HEAT_SPACE_INSTANT_DIFFSION_LOW, HEAT_SPACE_INSTANT_DIFFUSION_HIGH)
 
         self.cooler_diffuse, self.cooler_vent_diffuse = wind_diffuser(
             self.cell_walls, self.loc,
-            self.cell_size, self.cooler_decay)
+            self.cell_size, self.cooler_diffuse_sigma)
         self.heat_diffuse, self.heat_vent_diffuse = wind_diffuser(
             self.cell_walls, self.loc,
-            self.cell_size, self.heat_decay)
+            self.cell_size, self.heat_diffuse_sigma)
 
     def power_heat(self, t):
         return 0.0
@@ -152,42 +155,45 @@ class HeaterUnc(BaseVentilator):
     """
     Support defining the following parameters:
     - period_range: tuple, e.g. (86400, 604800) the range of period for heat source variation
-    - heat_variant_scale: tuple, e.g. (3200, 12000) the range of scale for heat source variation
     - heat_base_range: tuple, e.g. (200.0, 1600.0) the range of base heat for heat source
     """
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         if("base_heater" in kwargs):
             self.base_heater = kwargs["base_heater"]
-            self.base_factor = rnd.uniform(0.2, 0.8)
+            self.base_factor = rnd.uniform(HEAT_SOURCE_BASE_FACTOR_LOW, 
+                                           HEAT_SOURCE_BASE_FACTOR_HIGH)
         else:
             self.base_heater = None
         if("period_range" in kwargs):
             self.period = rnd.randint(*kwargs["period_range"])
-            self.period = self.period * 120
+            self.period = self.period * 60
         else:
-            self.period = rnd.randint(720, 5040)  # period of the heat source 
-            self.period = self.period * 120
+            self.period = rnd.randint(HEAT_SOURCE_PERIOD_RANGE_LOW, 
+                                      HEAT_SOURCE_PERIOD_RANGE_HIGH)  # period of the heat source 
+            self.period = self.period * 60
         if("heat_variant_scale" in kwargs):
             self.heat_variant_scale = rnd.uniform(*kwargs["heat_variant_scale"])
         else:
-            self.heat_variant_scale = rnd.uniform(0.1, 0.5)
+            self.heat_variant_scale = rnd.uniform(HEAT_SOURCE_VARIANT_SCALE_LOW, 
+                                                    HEAT_SOURCE_VARIANT_SCALE_HIGH)
         
         if("heat_base_range" in kwargs):
             self.heat_base = rnd.uniform(*kwargs["heat_base_range"])
         else:
 
-            self.heat_base = rnd.uniform(2000.0, 4000.0)
-        
-        
+            self.heat_base = rnd.uniform(BASE_HEAT_SOURCE_PERIOD_RANGE_LOW, 
+                                         BASE_HEAT_SOURCE_PERIOD_RANGE_HIGH)
 
-        self.heat_periodical = RandomFourier(ndim=1, max_order=64, max_item=8, max_steps=self.period, box_size=rnd.uniform(3200, 6800))
-
-        self.heat_base = rnd.uniform(2000.0, 4000.0)
+        self.heat_periodical = RandomFourier(ndim=1, max_order=HEAT_SOURCE_FOURIER_MAX_ORDER, 
+                                             max_item=HEAT_SOURCE_FOURIER_MAX_ITEM, 
+                                             max_steps=self.period, 
+                                             box_size=self.heat_variant_scale)
 
     def power_heat(self, t):
         # 根据t随机生成一个发热量
-        return numpy.clip(self.heat_base + numpy.clip(self.heat_periodical(t)[0], 0, None), None, 20000)
+        return numpy.clip(self.heat_base + numpy.clip(self.heat_periodical(t)[0], 0, None), 
+                          None, MAX_HEAT_SOURCE_POWER)
 
     def __call__(self, t):
         res = super().step(0, 0, t)
@@ -207,25 +213,27 @@ class Cooler(BaseVentilator):
         super().__init__(*args, **kwargs)
 
         # Simulate different temperature control strategy of Coolers
-        self.temp_diff_decay_ub = rnd.uniform(0.01, 2.0)
-        self.temp_diff_decay_lb = rnd.uniform(-2.0, -0.01)
+        self.temp_diff_decay_ub = rnd.uniform(COOLER_DIFF_DECAY_UB_LOW, COOLER_DIFF_DECAY_UB_HIGH)
+        self.temp_diff_decay_lb = rnd.uniform(COOLER_DIFF_DECAY_LB_LOW, COOLER_DIFF_DECAY_LB_HIGH)
 
-        self.max_cooling_power = 10000
-        self.power_vent_min = rnd.uniform(500, 1000)
+        self.max_cooling_power = COOLER_MAX_COOLING_POWER
+        self.power_vent_min = rnd.uniform(COOLER_POWER_VENT_MIN_LOW, COOLER_POWER_VENT_MIN_HIGH)
         self.min_cooling_power = self.power_vent_min
-        if (rnd.random() < 0.5):
-            self.power_vent_ratio = rnd.uniform(0.05, 0.15)  # fixed ventilator ratio
+        if (rnd.random() < COOLER_VENT_FIXED_RATIO_FACTOR):
+            self.power_vent_ratio = rnd.uniform(COOLER_VENT_FIXED_RATIO_LOW, COOLER_VENT_FIXED_RATIO_HIGH)  # fixed ventilator ratio
         else:
             self.power_vent_ratio = 0.0
-            self.power_vent_min = rnd.uniform(500, 1500)  # fixed ventilator power
+            self.power_vent_min = rnd.uniform(COOLER_VENT_FIXED_POWER_LOW, COOLER_VENT_FIXED_POWER_HIGH)  # fixed ventilator power
 
         # drift of return sensors
-        period = rnd.randint(100000, 300000000)
+        period = rnd.randint(DEVICE_SENSOR_DRIFT_PERIOD_LOW * 60,
+                             DEVICE_SENSOR_DRIFT_PERIOD_HIGH * 60)
         self.drift_periodical = RandomFourier(ndim=1, 
-                                              max_order=3, 
-                                              max_item=3, 
+                                              max_order=DEVICE_SENSOR_DRIFT_FOURIER_MAX_ORDER, 
+                                              max_item=DEVICE_SENSOR_DRIFT_FOURIER_MAX_ITEMS, 
                                               max_steps=period,
-                                              box_size=rnd.uniform(0.05, 0.5))
+                                              box_size=min(rnd.exponential(scale=DEVICE_SENSOR_DRIFT_MEAN),
+                                                           DEVICE_SENSOR_DRIFT_UPPER_BOUND))
         
     def set_control_type(self, control_type):
         self.control_type = control_type

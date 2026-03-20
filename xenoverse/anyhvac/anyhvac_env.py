@@ -89,7 +89,6 @@ class HVACEnv(gym.Env):
             # Last element is normalized episode progress [0, 1]
             low_bounds[n_sensors] = 0.0
             high_bounds[n_sensors] = 100.0
-            
             self.observation_space = gym.spaces.Box(low=low_bounds, high=high_bounds, shape=(obs_shape_dim,), dtype=numpy.float32)
         elif self.include_heat_in_observation:
             obs_shape_dim = n_sensors
@@ -99,8 +98,6 @@ class HVACEnv(gym.Env):
             low_bounds[n_sensors:] = 0.0
             high_bounds[n_sensors:] = 80000.0 
             self.observation_space = gym.spaces.Box(low=low_bounds, high=high_bounds, shape=(obs_shape_dim,), dtype=numpy.float32)
-            
-
         else:
             # observation space and action space
             self.observation_space = gym.spaces.Box(low=-273, high=273, shape=(n_sensors,), dtype=numpy.float32)
@@ -111,23 +108,18 @@ class HVACEnv(gym.Env):
         sensor_readings = np.array([sensor(self.state, self.t) for sensor in self.sensors], dtype=np.float32)
 
         if self.include_time_in_observation:
-
             normalized_episode_progress = float(self.episode_step*100) / 5040
             timer_readings = np.clip(normalized_episode_progress, 0.0, 100.0)
             timer_readings = [np.float32(normalized_episode_progress)]
-
             return np.concatenate((sensor_readings, timer_readings))
 
         elif self.include_heat_in_observation:
-
             static_chtc_array = numpy.copy(self.convection_coeffs)
             static_heat = numpy.zeros((self.n_width, self.n_length))
             equip_heat = []
 
             for i, equipment in enumerate(self.equipments):
-                
                 eff = equipment(self.sliding_t[i] + self.t)  # 发热功率每次reset滑窗
-
                 static_heat += eff["delta_energy"]
                 static_chtc_array += eff["delta_chtc"]
                 equip_heat.append(eff["heat"])
@@ -137,9 +129,9 @@ class HVACEnv(gym.Env):
 
             heat_readings = np.array(heater_progress, dtype=np.float32)
             return np.concatenate((sensor_readings, heat_readings))
-
         else:
             return sensor_readings
+        
     def _get_state(self):
         return numpy.copy(self.state)
 
@@ -181,8 +173,8 @@ class HVACEnv(gym.Env):
         equip_heat = []
         energy_costs = np.zeros(len(self.coolers), dtype=np.float32)
         cell_area = self.cell_size * self.cell_size
+        
         for i, equipment in enumerate(self.equipments):
-
             eff = equipment(self.sliding_t[i] + self.t) # 发热功率每次reset滑窗
             static_heat += eff["delta_energy"]
             static_chtc_array += eff["delta_chtc"]
@@ -190,6 +182,7 @@ class HVACEnv(gym.Env):
 
         # Heat convection
         # (nw + 1) * nl
+        print(self.state)
         for i in range(n):
             net_heat = numpy.copy(static_heat)
             net_chtc = numpy.copy(static_chtc_array)
@@ -201,19 +194,29 @@ class HVACEnv(gym.Env):
                 net_heat += eff["delta_energy"]
                 net_chtc += eff["delta_chtc"]
                 energy_costs[i] += eff["power"] * dt
+
             state_exp = numpy.full((self.n_width + 2, self.n_length + 2), self.ambient_temp)
             state_exp[1:-1, 1:-1] = self.state
             horizontal = - (state_exp[1:, 1:-1] - state_exp[:-1, 1:-1]) * net_chtc[:, :-1, 0] * self.csa
             # nw * (nl + 1)
             vertical = - (state_exp[1:-1, 1:] - state_exp[1:-1, :-1]) * net_chtc[:-1, :, 1] * self.csa
-
+            print(net_chtc, self.csa)
+            sys.exit(0)
             # calculate the heat transfer at ceil and floor
             floor_ceil_transfer = self.floorceil_chtc * cell_area * (self.ambient_temp - self.state)
 
             net_in = (horizontal[:-1, :] - horizontal[1:, :]) + (vertical[:, :-1] - vertical[:, 1:]) + floor_ceil_transfer
-
+            if(numpy.isnan(net_heat).any() or numpy.isnan(net_in).any()):
+                print("NaN detected in net_heat or net_in. Debug info:")
+                print("net_heat:", net_heat)
+                print("net_in:", net_in)
+                print("state_exp:", state_exp)
+                print("horizontal:", horizontal)
+                print("vertical:", vertical)
+                raise ValueError("NaN detected in heat calculations.")
             self.state += (net_heat + net_in) / self.heat_capacity * dt
             self.t += dt
+
         def custom_round(x):
             return int(x + 0.5) if x >= 0 else int(x - 0.5)
         self.t = custom_round(self.t)
@@ -351,7 +354,7 @@ class HVACEnv(gym.Env):
 
     def _random_action(self):
         if isinstance(self.action_space, Dict):
-        return self.action_space.sample()
+            return self.action_space.sample()
 
     def _pid_action(self, pid_params=None):
 
