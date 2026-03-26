@@ -97,34 +97,25 @@ class BaseSensor(BaseNodes):
 
         return gt_t + drift
 
-class BaseVentilator(BaseNodes):
+class BaseCooler(BaseNodes):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        self.wall_offset = numpy.array([[-0.5, 0], [0, -0.5]])  # 墙相对位置
-
-        self.power_eff_vent = rnd.uniform(COOLER_VENT_EFFICIENCY_LOW, COOLER_VENT_EFFICIENCY_HIGH)  # 功率效率
-        self.cooler_eer_base = rnd.uniform(COOLER_EER_BASE_LOW, COOLER_EER_BASE_HIGH)  # cooler effect
-        self.cooler_eer_decay_start = rnd.uniform(COOLER_EER_DECAY_START_HIGH, COOLER_EER_DECAY_START_HIGH)  # 制冷效率衰减起点
-        self.cooler_eer_zero_point = rnd.uniform(COOLER_EER_ZERO_POINT_LOW, COOLER_EER_ZERO_POINT_HIGH)  # 制冷效率为0的点
-        self.cooler_eer_reverse = rnd.uniform(COOLER_EER_REVERSE_LOW, COOLER_EER_REVERSE_HIGH)  # 随机生成一个介于 5.0 和 10.0 之间的浮动值，表示当温度差为负时的冷却效率。
-
-        # Impact Range
+        # Cooler 专用参数
+        self.power_eff_vent = rnd.uniform(COOLER_VENT_EFFICIENCY_LOW, COOLER_VENT_EFFICIENCY_HIGH)
+        self.cooler_eer_base = rnd.uniform(COOLER_EER_BASE_LOW, COOLER_EER_BASE_HIGH)
+        self.cooler_eer_decay_start = rnd.uniform(COOLER_EER_DECAY_START_HIGH, COOLER_EER_DECAY_START_HIGH)
+        self.cooler_eer_zero_point = rnd.uniform(COOLER_EER_ZERO_POINT_LOW, COOLER_EER_ZERO_POINT_HIGH)
+        self.cooler_eer_reverse = rnd.uniform(COOLER_EER_REVERSE_LOW, COOLER_EER_REVERSE_HIGH)
         self.cooler_diffuse_sigma = rnd.uniform(COOLER_SPACE_INSTANT_DIFFUSION_LOW, COOLER_SPACE_INSTANT_DIFFUSION_HIGH)
-        self.heat_diffuse_sigma = rnd.uniform(HEAT_SPACE_INSTANT_DIFFSION_LOW, HEAT_SPACE_INSTANT_DIFFUSION_HIGH)
 
+        # Cooler 专用扩散矩阵
         self.cooler_diffuse, self.cooler_vent_diffuse = wind_diffuser(
             self.cell_walls, self.loc,
             self.cell_size, self.cooler_diffuse_sigma)
-        self.heat_diffuse, self.heat_vent_diffuse = wind_diffuser(
-            self.cell_walls, self.loc,
-            self.cell_size, self.heat_diffuse_sigma)
 
-    def power_heat(self, t):
-        return 0.0
-
-    def step(self, power_cool, power_vent, time, building_state=None, ambient_state=None):
-        heat = self.power_heat(time)
+    def step(self, power_cool, power_vent, building_state=None, ambient_state=None):
+        """Cooler 的 step 方法"""
         if (building_state is not None):
             temp_diff = ambient_state - building_state[tuple(self.nloc)]
         else:
@@ -141,19 +132,34 @@ class BaseVentilator(BaseNodes):
         else:
             cooler_efficiency = 0.0
 
-        # 计算能力变化矩阵
-        delta_energy = - cooler_efficiency * self.cooler_diffuse * power_cool \
-                       + self.heat_diffuse * heat
+        delta_energy = - cooler_efficiency * self.cooler_diffuse * power_cool
 
-        # 计算由于通风引起的热传递系数变化
         delta_chtc = self.cooler_vent_diffuse * power_vent * self.power_eff_vent
 
         return {"delta_energy": delta_energy,
                 "delta_chtc": delta_chtc,
-                "heat": heat,
                 "power": power_cool + power_vent}
 
-class HeaterUnc(BaseVentilator):
+class BaseHeater(BaseNodes):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self.heat_diffuse_sigma = rnd.uniform(HEAT_SPACE_INSTANT_DIFFSION_LOW, HEAT_SPACE_INSTANT_DIFFUSION_HIGH)
+        self.heat_diffuse, self.heat_vent_diffuse = wind_diffuser(
+            self.cell_walls, self.loc,
+            self.cell_size, self.heat_diffuse_sigma)
+
+    def step(self, power_heat, power_vent):
+        
+        delta_energy = self.heat_diffuse * power_heat
+        delta_chtc = self.heat_vent_diffuse * power_vent if hasattr(self, 'power_eff_vent') else 0
+
+        return {"delta_energy": delta_energy,
+                "delta_chtc": delta_chtc,
+                "heat": power_heat,
+                "power": power_vent}
+
+class HeaterUnc(BaseHeater):
     """
     Support defining the following parameters:
     - period_range: tuple, e.g. (86400, 604800) the range of period for heat source variation
@@ -193,21 +199,22 @@ class HeaterUnc(BaseVentilator):
                                              box_size=self.heat_variant_scale)
 
     def power_heat(self, t):
-        # 根据t随机生成一个发热量
         return numpy.clip(self.heat_base + numpy.clip(self.heat_periodical(t)[0], 0, None), 
                           None, MAX_HEAT_SOURCE_POWER)
 
     def __call__(self, t):
-        res = super().step(0, 0, t)
-        if(self.base_heater is not None):
-            # if there is a base heater, use it
-            # neglect the power and chtc change
-            base = self.base_heater(t) 
-            res["heat"] = base["heat"] * self.base_factor + res["heat"] * (1 - self.base_factor)
-            res["delta_energy"] = base["delta_energy"] * self.base_factor + res["delta_energy"] * (1 - self.base_factor)
-        return res
+        if self.base_heater is not None:
+            base_heat = self.base_heater.power_heat(t)
+            power_heat = self.power_heat(t)
+            heat = self.base_factor * base_heat + (1-self.base_factor) * power_heat
+            res = super().step(power_heat=heat, power_vent=0)
+            return res
+        else:
+            heat = self.power_heat(t)
+            res = super().step(power_heat=heat, power_vent=0)
+            return res
 
-class Cooler(BaseVentilator):
+class Cooler(BaseCooler):
     """
     set power indirectly with set temperature and return temperature
     """
@@ -244,7 +251,11 @@ class Cooler(BaseVentilator):
         env_temp = self.calc_return_temperature(building_state, t)
         self.return_temperature = env_temp
         if switch == 0:
-            return super().step(0, 0, t, building_state=building_state, ambient_state=ambient_state)
+            return super().step(power_cool=0, 
+                                power_vent=0,
+                                building_state=building_state, 
+                                ambient_state=ambient_state)
+        
 
         set_temp = value
         temp_diff = env_temp - set_temp
@@ -263,7 +274,10 @@ class Cooler(BaseVentilator):
         power_cool = power_all - power_vent
         #print(temp_diff, power_cool, power_vent)
 
-        return super().step(power_cool, power_vent, t, building_state=building_state, ambient_state=ambient_state)
+        return super().step(power_cool=power_cool, 
+                            power_vent=power_vent,
+                            building_state=building_state, 
+                            ambient_state=ambient_state)
     
     def power_control(self, switch, value, t, building_state=None, ambient_state=None):
         if(switch == 0):
@@ -273,7 +287,10 @@ class Cooler(BaseVentilator):
             power_vent = min(max(self.power_vent_ratio * power_all, self.power_vent_min), power_all)
             power_cool = power_all - power_vent
 
-        return super().step(power_cool, power_vent, t, building_state=building_state, ambient_state=ambient_state)
+        return super().step(power_cool=power_cool, 
+                            power_vent=power_vent, 
+                            building_state=building_state, 
+                            ambient_state=ambient_state)
 
     def __call__(self, *args, **kwargs):
         if(self.control_type.lower()=="power"):
@@ -323,12 +340,14 @@ def wind_diffuser(cell_wall, src, cell_size, sigma):
         loc = diffuse_queue.pop(0)  # 当前计算的扩散源
         ci, cj = int(loc[0]), int(loc[1])  # 扩散源的网格坐标
         for i, j in neighbor:  # 遍历四个方向
-            if (i < 0 or j < 0 or i >= nx or j >= ny):
-                continue
 
             # 领格行列索引
             ni = ci + i
             nj = cj + j
+
+            if (ni < 0 or nj < 0 or ni >= nx - 1 or nj >= ny - 1):
+                continue
+
 
             # 墙体行列索引
             wi = ci + max(i, 0)
