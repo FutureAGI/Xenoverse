@@ -208,19 +208,17 @@ class HeaterUnc(HeaterVentilator):
         self.heat_curve = HeatCurve(*args, **kwargs)
 
     def power_heat(self, t):
-        return self.heat_curve.power_heat(t)
-
-    def __call__(self, t):
         if self.base_heater is not None:
             base_heat = self.base_heater.power_heat(t)
-            power_heat = self.power_heat(t)
-            heat = self.base_factor * base_heat + (1-self.base_factor) * power_heat
-            res = super().step(power_heat=heat, power_vent=0)
-            return res
+            power_heat = self.heat_curve.power_heat(t)
+            return self.base_factor * base_heat + (1-self.base_factor) * power_heat
         else:
-            heat = self.power_heat(t)
-            res = super().step(power_heat=heat, power_vent=0)
-            return res
+            return self.heat_curve.power_heat(t)
+
+    def __call__(self, t):
+        heat = self.power_heat(t)
+        res = super().step(power_heat=heat, power_vent=0)
+        return res
 
 class Cooler(CoolerVentilator):
     """
