@@ -3,7 +3,7 @@ import numpy
 from numpy import random as rnd
 import random
 import copy
-from .anyhvac_utils import BaseSensor, HeaterUnc, Cooler, wind_diffuser
+from .anyhvac_utils import BaseSensor, HeatCurve, HeaterUnc, Cooler, wind_diffuser
 from .hvac_config import *
 
 
@@ -64,11 +64,11 @@ def HVACTaskSampler(control_type='Temperature',
     for i in range(n_sensors):
         sensors.append(BaseSensor(nw, nl, cell_size, cell_walls, min_dist=1.2,
                     avoidance=sensors))
-    base_heater = HeaterUnc(nw, nl, cell_size, cell_walls, min_dist=1.2,
-                    avoidance=equipments)
+    base_heater = HeatCurve()
+
     for i in range(n_heaters):
         heater = HeaterUnc(nw, nl, cell_size, cell_walls, min_dist=1.2, avoidance=equipments, base_heater=base_heater)
-        timer.append(heater.period)
+        timer.append(heater.heat_curve.period)
         equipments.append(heater)
         hc_array[equipments[-1].nloc[0], equipments[-1].nloc[1]] += rnd.uniform(EQUIPMENT_HC_LOW, EQUIPMENT_HC_HIGH)
     for i in range(n_coolers):
