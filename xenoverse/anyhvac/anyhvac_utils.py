@@ -97,7 +97,7 @@ class BaseSensor(BaseNodes):
 
         return gt_t + drift
 
-class BaseCooler(BaseNodes):
+class CoolerVentilator(BaseNodes):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -140,7 +140,7 @@ class BaseCooler(BaseNodes):
                 "delta_chtc": delta_chtc,
                 "power": power_cool + power_vent}
 
-class BaseHeater(BaseNodes):
+class HeaterVentilator(BaseNodes):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -159,20 +159,8 @@ class BaseHeater(BaseNodes):
                 "heat": power_heat,
                 "power": power_vent}
 
-class HeaterUnc(BaseHeater):
-    """
-    Support defining the following parameters:
-    - period_range: tuple, e.g. (86400, 604800) the range of period for heat source variation
-    - heat_base_range: tuple, e.g. (200.0, 1600.0) the range of base heat for heat source
-    """
+class HeatCurve:
     def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        if("base_heater" in kwargs):
-            self.base_heater = kwargs["base_heater"]
-            self.base_factor = rnd.uniform(HEAT_SOURCE_BASE_FACTOR_LOW, 
-                                           HEAT_SOURCE_BASE_FACTOR_HIGH)
-        else:
-            self.base_heater = None
         if("period_range" in kwargs):
             self.period = rnd.randint(*kwargs["period_range"])
             self.period = self.period * 60
@@ -197,10 +185,30 @@ class HeaterUnc(BaseHeater):
                                              max_item=HEAT_SOURCE_FOURIER_MAX_ITEM, 
                                              max_steps=self.period, 
                                              box_size=self.heat_variant_scale)
-
+        
     def power_heat(self, t):
         return numpy.clip(self.heat_base + numpy.clip(self.heat_periodical(t)[0], 0, None), 
                           None, MAX_HEAT_SOURCE_POWER)
+
+class HeaterUnc(HeaterVentilator):
+    """
+    Support defining the following parameters:
+    - period_range: tuple, e.g. (86400, 604800) the range of period for heat source variation
+    - heat_base_range: tuple, e.g. (200.0, 1600.0) the range of base heat for heat source
+    """
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if("base_heater" in kwargs):
+            self.base_heater = kwargs["base_heater"]
+            self.base_factor = rnd.uniform(HEAT_SOURCE_BASE_FACTOR_LOW, 
+                                           HEAT_SOURCE_BASE_FACTOR_HIGH)
+        else:
+            self.base_heater = None
+        
+        self.heat_curve = HeatCurve(*args, **kwargs)
+
+    def power_heat(self, t):
+        return self.heat_curve.power_heat(t)
 
     def __call__(self, t):
         if self.base_heater is not None:
@@ -214,7 +222,7 @@ class HeaterUnc(BaseHeater):
             res = super().step(power_heat=heat, power_vent=0)
             return res
 
-class Cooler(BaseCooler):
+class Cooler(CoolerVentilator):
     """
     set power indirectly with set temperature and return temperature
     """
