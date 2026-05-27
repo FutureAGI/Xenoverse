@@ -1,186 +1,417 @@
-# Introduction
+# MazeWorld
 
-MazeWorld is a 3D environment with randomly generated mazes and randomly generated navigation targets. It has been implemented in Numpy and supports both discrete and continuous action spaces. MazeWorld can be regarded as one type of ObjectNav tasks. However, unlike other ObjectNav tasks which can be mainly solved by ***Zero-Shot*** capabilities, MazeWorld requires iterative interaction and ***self-adaption*** between the agent and the environment to solve the task. Moreover, due to domain randomization, the maze can not be solved by zero-shot capabilities. MazeWorld is mainly used for research on Meta Reinforcement Learning (*Meta-RL*), especially In-Context Reinforcement Learning (*ICRL*).
+English | [中文](README.zh.md)
+
+MazeWorld is a procedurally generated 3D maze-navigation environment. Each task randomizes maze topology, textures, navigation targets, command sequences, and physical scale, making it useful for navigation, exploration, meta-RL, in-context adaptation, and agent-environment interaction research.
+
+Unlike simple object-navigation benchmarks that can often be handled with strong zero-shot priors alone, MazeWorld is designed to require iterative interaction, memory, and environment-specific adaptation.
+
 <div style="width: 960; overflow: hidden;">
   <img src="https://github.com/FutureAGI/DataPack/blob/main/demo/mazeworld/Keyboard-Demo-1.jpg" alt="Keyboard Demo">
   <img src="https://github.com/FutureAGI/DataPack/blob/main/demo/mazeworld/Keyboard-Demo-2.jpg" alt="Keyboard Demo">
   <img src="https://github.com/FutureAGI/DataPack/blob/main/demo/mazeworld/Keyboard-Demo-3.jpg" alt="Keyboard Demo">
 </div>
 
-## Keyboard Demonstrations
+## What This Module Provides
 
-You may try MazeWorld with your own keyboard with the following commands:
+- Procedurally generated 3D maze tasks.
+- A Gymnasium environment with both discrete and continuous action modes.
+- Randomized command-following navigation tasks.
+- Task resampling utilities.
+- A built-in SLAM-style baseline agent.
+- Local-map and global-map accessors for analysis and visualization.
+- Keyboard and scripted demos.
+
+## Installation
+
+Install from PyPI:
+
 ```bash
-python -m xenoverse.mazeworld.demo.keyboard_play_demo --help
-  --max_steps MAX_STEPS
-  --visibility_3D VISIBILITY_3D     #3D vision range, Only valid in 3D mode
-  --save_replay SAVE_REPLAY         #Save the replay trajectory in file
-  --verbose VERBOSE
+pip install "xenoverse[mazeworld]"
 ```
 
-## Smart SLAM-based Agent
+Install from source:
 
-We implement a smart SLAM-based agent that can do SLAM & Planning automatically, you can try it with the following command:
-```bash
-python -m xenoverse.mazeworld.demo.agent_play_demo --help
-  --max_steps MAX_STEPS
-  --save_replay FILE_NAME #SAVE_REPLAY Save the replay trajectory in file
-  --memory_keep_ratio FLOAT #MEMORY_KEEP_RATIO Keep ratio of memory when the agent switch from short to long term memory. 1.0 means perfect memory, 0.0 means no memory
-  --verbose VERBOSE 
-```
-
-![Demonstration-Agent-Control](https://github.com/FutureAGI/DataPack/blob/main/demo/mazeworld/AgentDemo.gif) 
-
-# Installation
-
-#### Remote installation
-```bash
-pip install xenoverse[mazeworld]
-```
-
-#### Local installation
 ```bash
 git clone https://github.com/FutureAGI/xenoverse
 cd xenoverse
-pip install .[mazeworld]
+pip install ".[mazeworld]"
 ```
 
-# Quick Start with the APIs
+## Main Components
 
-Here is an example of creating and running MazeWorld environments
+The main public entry points are:
 
-## Creating Maze Environments
+- `xenoverse.mazeworld.MazeWorldContinuous3D`: main 3D environment class.
+- `xenoverse.mazeworld.MazeTaskSampler`: random task sampler.
+- `xenoverse.mazeworld.Resampler`: task resampler.
+- `xenoverse.mazeworld.agents.SmartSLAMAgent`: built-in navigation baseline.
+
+The registered environment ID is:
+
+- `mazeworld-v2`
+
+## Recommended Workflow
+
+The standard usage pattern is:
+
+1. Create the environment.
+2. Sample or load a task.
+3. Call `env.set_task(task)`.
+4. Call `env.reset()`.
+5. Run the environment with `step(...)`.
+
+Important: `reset()` requires that a task has already been attached.
+
+## Quick Start
+
+### 1. Create the environment
+
 ```python
 import gymnasium as gym
 import xenoverse.mazeworld
 from xenoverse.mazeworld import MazeTaskSampler
 
-# Make sure you have access to GUI if setting enable_render=True
-maze_env = gym.make("mazeworld-v2", enable_render=True)
-
-# In case you want to run the environment in the backend, set enable_render=False
-# maze_env = gym.make("mazeworld-v2", enable_render=False)
+env = gym.make(
+    "mazeworld-v2",
+    enable_render=False,
+    action_space_type="Discrete16",
+)
 ```
 
-## Sampling a maze task
+If you want on-screen rendering, set `enable_render=True`. That requires GUI access.
+
+### 2. Sample and set a task
 
 ```python
-#Sample a random maze task
 task = MazeTaskSampler()
+env.set_task(task)
+obs, info = env.reset()
 ```
 
-It is important to note that sampling a task might result in a maze that is variant in topology, texture, navigation targets, size, height of the robot, height of the wall, commands etc.
-
-In case you want to resample a task, while keeping the some of your environment settings unchanged, you can do the following:
+### 3. Run with random actions
 
 ```python
-#Sample a new task from a existing task, keep the scenario unchanged, only change the commands and start point
+terminated = False
+truncated = False
+
+while not (terminated or truncated):
+    action = env.action_space.sample()
+    obs, reward, terminated, truncated, info = env.step(action)
+```
+
+## What a Task Contains
+
+`MazeTaskSampler(...)` produces a task dictionary that includes randomized components such as:
+
+- maze wall topology
+- start position
+- landmark locations
+- command sequence
+- cell size
+- wall height
+- agent height
+- textures
+- rewards
+- field of view
+
+So two sampled tasks can differ in geometry, scale, difficulty, visual appearance, and target order.
+
+## Task Sampling
+
+The task sampler supports a range of controls over maze generation.
+
+Example:
+
+```python
+from xenoverse.mazeworld import MazeTaskSampler
+
+task = MazeTaskSampler(
+    n_range=(9, 25),
+    allow_loops=True,
+    cell_size_range=(1.5, 4.5),
+    wall_height_range=(2.0, 6.0),
+    agent_height_range=(1.6, 2.0),
+    landmarks_number_range=(5, 10),
+    commands_sequence=200,
+    wall_density_range=(0.2, 0.4),
+)
+```
+
+Useful parameters:
+
+- `n_range`: maze grid-size range. The sampled maze is forced to odd size internally.
+- `allow_loops`: whether the maze may contain loops rather than a strict tree structure.
+- `cell_size_range`: physical size of each grid cell.
+- `wall_height_range`: wall height range.
+- `agent_height_range`: camera or robot height range.
+- `landmarks_number_range`: number of possible navigation targets.
+- `commands_sequence`: number of target commands in one task episode.
+- `wall_density_range`: density used during maze generation.
+- `step_reward`, `collision_reward`, `goal_reward`: reward shaping terms.
+
+Example of forcing a fixed 15x15 maze with 2-meter cells:
+
+```python
+task = MazeTaskSampler(
+    n_range=(15, 15),
+    cell_size_range=(2.0, 2.0),
+)
+```
+
+## Task Resampling
+
+If you want to preserve the current maze layout but change targets, command sequences, or start positions, use `Resampler(...)`.
+
+```python
 from xenoverse.mazeworld import Resampler
+
 new_task = Resampler(task)
 ```
 
-## Running agent-environment interaction
+Typical uses:
 
-Here is an simplest version of running the maze environment step by step
+- keep maze geometry but resample commands
+- keep geometry but resample start position
+- optionally resample landmarks or landmark colors
 
-```python
-#Set the task configuration to the meta environment
-maze_env.set_task(task)
-initial_observation, initial_information = maze_env.reset()
+This is useful when you want multiple related navigation episodes within one scenario.
 
-#Start the task
-done = False
-while not done:
-    action = maze_env.action_space.sample() # Replace it with your own policy function
-    observation, reward, terminated, truncated, info = maze_env.step(action)
-    maze_env.render()
-```
+## Observation and Info
 
-## Using the built-in agents
+### Observation
 
-We implement a smart agent with simulated SLAM and planning abilities. It can effectively employ a Exploration-then-Exploitation strategy to explore the environment and navigate to the target. Notice that the agent can be used as high-level baseline and teacher for generating trajectories efficiently, but it is not guarranteed to be achieve global optimal performance.
+MazeWorld returns an RGB image observation from the agent's first-person 3D view.
 
-```python
-from xenoverse.mazeworld.agents import SmartSLAMAgent
+By default:
 
-agent = SmartSLAMAgent(maze_env=maze_env, memory_keep_ratio=0.25, render=True) # memory_keep_ratio=0.25 means the agent only keeps 25% of what it sees in the long term memory
-action = agent.step(observation, reward)
-```
-It's important to be aware that the "render=True" option cannot be utilized concurrently with "enable_render=True" when configuring the maze environment.
+- observation space is an image tensor with shape `(H, W, 3)`
+- values are `uint8`
 
-# High-level APIs
+The exact shape depends on the `resolution` argument passed to the environment.
 
-## Configurating the task sampler
+### Info dictionary
 
-You may pass arguments to the task sampler to control the generation of maze tasks
+`reset()` and `step()` return metadata including:
 
-```python
-MazeTaskSampler(
-  n_range=(9, 25),  # The range of the grids used in the maze
-  allow_loops=True,  # Whether to allow loops in the maze
-  cell_size_range=(1.5, 4.5), # The range of the size of each grid (cell)
-  wall_height_range=(2.0, 6.0),  # The range of the height of the wall
-  agent_height_range=(1.6, 2.0), # The range of the height of the robot
-  landmarks_number_range=(5, 10), # The range of the number of landmarks (navigation targets)
-  commands_sequence=200, # The number of commands in navigation
-  wall_density_range=(0.2, 0.4)) # The range of the density that controls the fraction of the wall
-```
+- `steps`: current step count
+- `command`: current target command represented as RGB color
 
-For instance if you want to generate mazes of 15x15 grids with grid size being always 2.0 (which would give a 30mx30m (900m^2) maze, you can do the following:)
-```python
-task = MazeTaskSampler(n_range=(15, 15), cell_size_range=(2.0, 2.0))
-```
+The command color tells the agent which landmark should be reached next.
 
-## Robot Action Space
+## Command Representation
 
-You may choose different action space for the robot by setting the "action_space_type" argument when configuring the maze environment. E.g., the default choice for action space is "Discrete16", which means the robot have 16 different actions to choose from.
+MazeWorld uses color-coded commands. The current target is represented by a landmark color rather than text.
+
+If you want the command embedded directly into the image observation, create the environment with:
 
 ```python
-maze_env = gym.make("mazeworld-v2", action_space_type="Discrete16", enable_render=False)
+env = gym.make(
+    "mazeworld-v2",
+    command_in_observation=True,
+    enable_render=False,
+)
 ```
 
-It is also possible to use "Discrete32" and "Continuous". If using the built-in agent, you can not set the "action_space_type" argument to "Continuous", only "Discrete16" and "Discrete32" are supported.
+You can also read the current command color from `info["command"]`.
 
-The action space for the MazeWorld follows the dynamics of the two-wheel-steering robot. For "Continuous" action space, the action is a 2-dimensional vector, where the first element controls the steering angle and the second element controls the speed. As shown in the figure below:
+<div style="width: 480; overflow: hidden;">
+  <img src="https://github.com/FutureAGI/DataPack/blob/main/demo/mazeworld/CommandDemo.jpg" alt="command_in_observation">
+</div>
+
+## Action Spaces
+
+MazeWorld supports three action-space modes through `action_space_type`:
+
+- `Discrete16`
+- `Discrete32`
+- `Continuous`
+
+Example:
+
+```python
+env = gym.make(
+    "mazeworld-v2",
+    action_space_type="Discrete16",
+    enable_render=False,
+)
+```
+
+### Discrete modes
+
+- `Discrete16` is the default.
+- `Discrete32` exposes a larger discrete action set.
+
+These are the supported modes for the built-in `SmartSLAMAgent`.
+
+### Continuous mode
+
+In `Continuous` mode, the action is a 2D vector:
+
+- first component: turning command
+- second component: walking speed
+
+Both components are clipped into `[-1, 1]`.
 
 <div style="width: 240; overflow: hidden;">
   <img src="https://github.com/FutureAGI/DataPack/blob/main/demo/mazeworld/Dynamics.jpg" alt="Robot Dynamics">
 </div>
 
-## Accessing the local and global map
+## Rendering
 
-You might want to directly access the local and global map of the maze environment. You can do so by calling "get_local_map()" and "get_global_map()", which return a numpy array of the local and global map respectively. The local map is represented in the local coordinate system, while the global map is represented in the global coordinate system.
+If `enable_render=True`, calling `env.render()` shows:
+
+- the first-person observation
+- a global map view
+- a local map view
+
+Example:
 
 ```python
-maze_env = gym.make("mazeworld-v2", enable_render=False)
-local_map = maze_env.get_local_map()
-global_map = maze_env.get_global_map()
+env = gym.make("mazeworld-v2", enable_render=True)
 ```
 
-## Retrieve the trajectory of the agent
+During manual control, keyboard interaction is available through the demo script described below.
 
-To retrieve the trajectory of the agent, you can call "save_trajectory()" at the end of each episode. The function returns a image with the trajectory of the agent in the global map, as shown in the figure below:
+## Keyboard Demo
+
+You can control the environment manually with:
+
+```bash
+python -m xenoverse.mazeworld.demo.keyboard_play_demo --help
+```
+
+Common arguments include:
+
+- `--max_steps`
+- `--visibility_3D`
+- `--save_replay`
+- `--verbose`
+
+## Built-in Smart Agent
+
+MazeWorld includes a SLAM-and-planning-style baseline:
+
+```python
+from xenoverse.mazeworld.agents import SmartSLAMAgent
+
+agent = SmartSLAMAgent(
+    maze_env=env,
+    memory_keep_ratio=0.25,
+    render=False,
+)
+
+terminated = False
+truncated = False
+reward = 0.0
+
+while not (terminated or truncated):
+    action = agent.step(obs, reward)
+    obs, reward, terminated, truncated, info = env.step(action)
+```
+
+Notes:
+
+- `memory_keep_ratio=1.0` means near-perfect long-term retention.
+- Lower values simulate forgetting.
+- The built-in agent requires a discrete action space, not `Continuous`.
+- Avoid using `agent.render=True` together with `env.enable_render=True`; both want to own a rendering window.
+
+![Demonstration-Agent-Control](https://github.com/FutureAGI/DataPack/blob/main/demo/mazeworld/AgentDemo.gif)
+
+## Agent and Teacher Use Cases
+
+The built-in smart agent is best treated as:
+
+- a strong heuristic baseline
+- a trajectory generator
+- a teacher policy for imitation or dataset generation
+
+It is not guaranteed to be globally optimal.
+
+## Accessing Maps
+
+You can directly query both local and global maps from the environment.
+
+```python
+local_map = env.get_local_map()
+global_map = env.get_global_map()
+```
+
+Important detail:
+
+- each function returns a tuple containing a pygame surface and a NumPy array
+- if you only want the NumPy array, unpack the second element
+
+Example:
+
+```python
+local_surface, local_array = env.get_local_map()
+global_surface, global_array = env.get_global_map()
+```
+
+The local map is aligned to the agent viewpoint. The global map shows the full maze layout.
+
+## Saving the Agent Trajectory
+
+At the end of an episode, you can save a trajectory visualization:
+
+```python
+env.save_trajectory("trajectory.png")
+```
+
+This produces an image showing the path taken by the agent on the maze map.
 
 <div style="width: 320; overflow: hidden;">
   <img src="https://github.com/FutureAGI/DataPack/blob/main/demo/mazeworld/TrajectoryDemo.png" alt="Robot Trajectory">
 </div>
 
-## Reward Setting
+## Rewards
 
-The MazeWorld defaultly uses a reward 0 for each step, a positive reward relating to the scale of the maze for reaching the target, and punishment for collision. You can also customize the reward function by setting "step_reward", "goal_reward", and "collision_punishment" in the MazeTaskSampler function.
+The default reward structure includes:
 
-## Reading the commands
+- per-step reward, usually `0`
+- positive reward for reaching the current target
+- collision penalty
 
-The commands in MazeWorld are represented by specific color. You might choose to embed the command as a color bar in the 3D observtion by setting "command_in_sequence=True" when initializing the environment. You may also directly access the rgb color of the command by the returned information of "step()" function:
+You can customize these through task-sampler arguments such as:
 
-```python
-...
-  ...
-    ...
-    observation, reward, done, info = maze_env.step(action)
-    rgb_command = info["command"]
+- `step_reward`
+- `goal_reward`
+- `collision_reward`
+
+## Common Pitfalls
+
+- Call `env.set_task(task)` before `env.reset()`.
+- `SmartSLAMAgent` works only with `Discrete16` or `Discrete32`.
+- Do not enable both agent-side rendering and environment-side rendering at the same time unless you intentionally want competing windows.
+- `get_local_map()` and `get_global_map()` return `(surface, numpy_array)`, not just the array.
+- `command_in_observation=True` changes the image observation by overlaying the command color bar.
+
+## File Guide
+
+- `envs/task_sampler.py`: maze task generation and resampling.
+- `envs/maze_env.py`: Gymnasium wrapper and environment-facing APIs.
+- `envs/maze_continuous_3d.py`: 3D observation and movement core.
+- `agents/smart_slam_agent.py`: built-in SLAM-style baseline.
+- `demo/keyboard_play_demo.py`: manual keyboard demo.
+- `demo/agent_play_demo.py`: scripted smart-agent demo.
+
+## References
+
+```bibtex
+@article{wang2024benchmarking,
+  title={Benchmarking General Purpose In-Context Learning},
+  author={Wang, Fan and Lin, Chuan and Cao, Yang and Kang, Yu},
+  journal={arXiv preprint arXiv:2405.17234},
+  year={2024}
+}
+
+@article{wang2025context,
+  title={Context and Diversity Matter: The Emergence of In-Context Learning in World Models},
+  author={Wang, Fan and Chen, Zhiyuan and Zhong, Yuxuan and Zheng, Sunjian and Shao, Pengtao and Yu, Bo and Liu, Shaoshan and Wang, Jianan and Ding, Ning and Cao, Yang and others},
+  booktitle={International Conference on Learning Representations},
+  volume={2026},
+  year={2026}
+}
 ```
-
-<div style="width: 480; overflow: hidden;">
-  <img src="https://github.com/FutureAGI/DataPack/blob/main/demo/mazeworld/CommandDemo.jpg" alt="command_in_observation">
-</div>
