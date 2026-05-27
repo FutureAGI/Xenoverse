@@ -105,7 +105,7 @@ observation, info = env.reset()
 
 ### 1. AnyMDP
 
-路径：[xenoverse/anymdp](C:/Users/fanan/codes/Xenoverse/xenoverse/anymdp)
+路径：[xenoverse/anymdp](xenoverse/anymdp)
 
 - 面向随机生成的 MDP、POMDP 和多 token POMDP。
 - 主要接口：`AnyMDPEnv`、`AnyMDPTaskSampler`、`AnyPOMDPTaskSampler`、`MultiTokensAnyPOMDPTaskSampler`。
@@ -114,7 +114,7 @@ observation, info = env.reset()
 
 ### 2. LinDS
 
-路径：[xenoverse/linds](C:/Users/fanan/codes/Xenoverse/xenoverse/linds)
+路径：[xenoverse/linds](xenoverse/linds)
 
 - 面向程序化生成的线性时不变动力系统。
 - 主要接口：`LinearDSEnv`、`LinearDSSampler`、`LinearDSSamplerRandomDim`、`LTISystemMPC`。
@@ -122,7 +122,7 @@ observation, info = env.reset()
 
 ### 3. AnyHVAC
 
-路径：[xenoverse/anyhvac](C:/Users/fanan/codes/Xenoverse/xenoverse/anyhvac)
+路径：[xenoverse/anyhvac](xenoverse/anyhvac)
 
 - 面向随机室内环境下的 HVAC 控制。
 - 主要接口：`HVACEnv`、`HVACEnvVisible`。
@@ -130,7 +130,7 @@ observation, info = env.reset()
 
 ### 4. MetaLang
 
-路径：[xenoverse/metalang](C:/Users/fanan/codes/Xenoverse/xenoverse/metalang)
+路径：[xenoverse/metalang](xenoverse/metalang)
 
 - 面向长上下文与上下文学习评测的伪语言生成。
 - 主要接口：`MetaLangV1`、`MetaLangV2`、`MetaLMV3Env`、`TaskSamplerV1`、`TaskSamplerV2`、`TaskSamplerV3`。
@@ -138,7 +138,7 @@ observation, info = env.reset()
 
 ### 5. MazeWorld
 
-路径：[xenoverse/mazeworld](C:/Users/fanan/codes/Xenoverse/xenoverse/mazeworld)
+路径：[xenoverse/mazeworld](xenoverse/mazeworld)
 
 - 面向 3D 程序化迷宫导航。
 - 主要接口：`MazeWorldContinuous3D`、`MazeTaskSampler`、`Resampler`。
@@ -147,7 +147,7 @@ observation, info = env.reset()
 
 ### 6. MetaControl
 
-路径：[xenoverse/metacontrol](C:/Users/fanan/codes/Xenoverse/xenoverse/metacontrol)
+路径：[xenoverse/metacontrol](xenoverse/metacontrol)
 
 - 面向随机化的经典控制与 humanoid 风格控制任务。
 - 当前注册环境：`random-cartpole-v0`、`random-acrobot-v0`、`random-humanoid-v0`。
@@ -155,7 +155,7 @@ observation, info = env.reset()
 
 ### 7. Sci Agents
 
-路径：[xenoverse_agents/sci_agents](C:/Users/fanan/codes/Xenoverse/xenoverse_agents/sci_agents)
+路径：[xenoverse_agents/sci_agents](xenoverse_agents/sci_agents)
 
 - 面向科学 Agent 工作流与程序化化学世界。
 - 主要入口：`demo.py`、`generate_worlds.py`、`environment/api.py`、`world_gen/sampler.py`。
@@ -165,15 +165,15 @@ observation, info = env.reset()
 
 当前可以直接阅读的说明文档：
 
-- [AnyMDP README](C:/Users/fanan/codes/Xenoverse/xenoverse/anymdp/README.md)
-- [AnyHVAC README](C:/Users/fanan/codes/Xenoverse/xenoverse/anyhvac/README.md)
-- [LinDS README](C:/Users/fanan/codes/Xenoverse/xenoverse/linds/README.md)
-- [MetaLang README](C:/Users/fanan/codes/Xenoverse/xenoverse/metalang/README.md)
-- [MazeWorld README](C:/Users/fanan/codes/Xenoverse/xenoverse/mazeworld/README.md)
-- [MetaControl README](C:/Users/fanan/codes/Xenoverse/xenoverse/metacontrol/README.md)
-- [xenoverse_agents README](C:/Users/fanan/codes/Xenoverse/xenoverse_agents/README.md)
-- [AI Town README](C:/Users/fanan/codes/Xenoverse/xenoverse_agents/ai_town/README.md)
-- [Sci Agents README](C:/Users/fanan/codes/Xenoverse/xenoverse_agents/sci_agents/README.md)
+- [AnyMDP README](xenoverse/anymdp/README.zh.md)
+- [AnyHVAC README](xenoverse/anyhvac/README.zh.md)
+- [LinDS README](xenoverse/linds/README.zh.md)
+- [MetaLang README](xenoverse/metalang/README.zh.md)
+- [MazeWorld README](xenoverse/mazeworld/README.zh.md)
+- [MetaControl README](xenoverse/metacontrol/README.zh.md)
+- [xenoverse_agents README](xenoverse_agents/README.zh.md)
+- [AI Town README](xenoverse_agents/ai_town/README.zh.md)
+- [Sci Agents README](xenoverse_agents/sci_agents/README.zh.md)
 
 ## 适用研究方向
 

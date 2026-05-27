@@ -107,7 +107,7 @@ observation, info = env.reset()
 
 ### 1. AnyMDP
 
-Path: [xenoverse/anymdp](C:/Users/fanan/codes/Xenoverse/xenoverse/anymdp)
+Path: [xenoverse/anymdp](xenoverse/anymdp)
 
 - Focus: procedurally generated MDPs, POMDPs, and multi-token POMDPs.
 - Main APIs: `AnyMDPEnv`, `AnyMDPTaskSampler`, `AnyPOMDPTaskSampler`, `MultiTokensAnyPOMDPTaskSampler`.
@@ -116,7 +116,7 @@ Path: [xenoverse/anymdp](C:/Users/fanan/codes/Xenoverse/xenoverse/anymdp)
 
 ### 2. LinDS
 
-Path: [xenoverse/linds](C:/Users/fanan/codes/Xenoverse/xenoverse/linds)
+Path: [xenoverse/linds](xenoverse/linds)
 
 - Focus: procedurally generated linear time-invariant dynamical systems.
 - Main APIs: `LinearDSEnv`, `LinearDSSampler`, `LinearDSSamplerRandomDim`, `LTISystemMPC`.
@@ -124,7 +124,7 @@ Path: [xenoverse/linds](C:/Users/fanan/codes/Xenoverse/xenoverse/linds)
 
 ### 3. AnyHVAC
 
-Path: [xenoverse/anyhvac](C:/Users/fanan/codes/Xenoverse/xenoverse/anyhvac)
+Path: [xenoverse/anyhvac](xenoverse/anyhvac)
 
 - Focus: randomized HVAC control in procedurally generated indoor settings.
 - Main APIs: `HVACEnv`, `HVACEnvVisible`.
@@ -132,7 +132,7 @@ Path: [xenoverse/anyhvac](C:/Users/fanan/codes/Xenoverse/xenoverse/anyhvac)
 
 ### 4. MetaLang
 
-Path: [xenoverse/metalang](C:/Users/fanan/codes/Xenoverse/xenoverse/metalang)
+Path: [xenoverse/metalang](xenoverse/metalang)
 
 - Focus: pseudo-language generation for long-context and in-context learning benchmarks.
 - Main APIs: `MetaLangV1`, `MetaLangV2`, `MetaLMV3Env`, `TaskSamplerV1`, `TaskSamplerV2`, `TaskSamplerV3`.
@@ -140,7 +140,7 @@ Path: [xenoverse/metalang](C:/Users/fanan/codes/Xenoverse/xenoverse/metalang)
 
 ### 5. MazeWorld
 
-Path: [xenoverse/mazeworld](C:/Users/fanan/codes/Xenoverse/xenoverse/mazeworld)
+Path: [xenoverse/mazeworld](xenoverse/mazeworld)
 
 - Focus: 3D navigation in procedurally generated mazes with discrete or continuous control.
 - Main APIs: `MazeWorldContinuous3D`, `MazeTaskSampler`, `Resampler`.
@@ -149,7 +149,7 @@ Path: [xenoverse/mazeworld](C:/Users/fanan/codes/Xenoverse/xenoverse/mazeworld)
 
 ### 6. MetaControl
 
-Path: [xenoverse/metacontrol](C:/Users/fanan/codes/Xenoverse/xenoverse/metacontrol)
+Path: [xenoverse/metacontrol](xenoverse/metacontrol)
 
 - Focus: randomized classic-control and humanoid-style control tasks.
 - Registered environments: `random-cartpole-v0`, `random-acrobot-v0`, `random-humanoid-v0`.
@@ -157,7 +157,7 @@ Path: [xenoverse/metacontrol](C:/Users/fanan/codes/Xenoverse/xenoverse/metacontr
 
 ### 7. Sci Agents
 
-Path: [xenoverse_agents/sci_agents](C:/Users/fanan/codes/Xenoverse/xenoverse_agents/sci_agents)
+Path: [xenoverse_agents/sci_agents](xenoverse_agents/sci_agents)
 
 - Focus: scientific-agent workflows over procedurally generated chemistry worlds.
 - Main entrypoints: `demo.py`, `generate_worlds.py`, `environment/api.py`, `world_gen/sampler.py`.
