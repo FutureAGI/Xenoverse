@@ -3,7 +3,7 @@ from __future__ import annotations
 import math
 from typing import Dict, List, Optional, Tuple
 
-from world_gen.models import Chemical, Reaction, World
+from ..world_gen.models import Chemical, Reaction, World
 from .simulator import simulate_reaction, state_at, R_kJ
 from .cost_model import calculate_cost
 from .templates import generate_response, _medicinal_hint, _toxicity_note, PATHWAY_EFFICIENCY_NOTE

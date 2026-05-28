@@ -4,7 +4,7 @@ from typing import Dict, Optional
 
 import numpy as np
 
-from world_gen.models import Chemical, Reaction
+from ..world_gen.models import Chemical, Reaction
 from .simulator import state_at
 
 

@@ -7,8 +7,12 @@ import argparse
 import os
 import sys
 
-from world_gen.sampler import WorldSampler
-from world_gen.validator import WorldValidator
+try:
+    from .world_gen.sampler import WorldSampler
+    from .world_gen.validator import WorldValidator
+except ImportError:
+    from world_gen.sampler import WorldSampler
+    from world_gen.validator import WorldValidator
 
 
 def generate_worlds(
