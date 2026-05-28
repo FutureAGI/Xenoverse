@@ -167,15 +167,15 @@ Path: [xenoverse_agents/sci_agents](xenoverse_agents/sci_agents)
 
 The following module-level documents are available:
 
-- [AnyMDP README](C:/Users/fanan/codes/Xenoverse/xenoverse/anymdp/README.md)
-- [AnyHVAC README](C:/Users/fanan/codes/Xenoverse/xenoverse/anyhvac/README.md)
-- [LinDS README](C:/Users/fanan/codes/Xenoverse/xenoverse/linds/README.md)
-- [MetaLang README](C:/Users/fanan/codes/Xenoverse/xenoverse/metalang/README.md)
-- [MazeWorld README](C:/Users/fanan/codes/Xenoverse/xenoverse/mazeworld/README.md)
-- [MetaControl README](C:/Users/fanan/codes/Xenoverse/xenoverse/metacontrol/README.md)
-- [xenoverse_agents README](C:/Users/fanan/codes/Xenoverse/xenoverse_agents/README.md)
-- [AI Town README](C:/Users/fanan/codes/Xenoverse/xenoverse_agents/ai_town/README.md)
-- [Sci Agents README](C:/Users/fanan/codes/Xenoverse/xenoverse_agents/sci_agents/README.md)
+- [AnyMDP README](xenoverse/anymdp/README.md)
+- [AnyHVAC README](xenoverse/anyhvac/README.md)
+- [LinDS README](xenoverse/linds/README.md)
+- [MetaLang README](xenoverse/metalang/README.md)
+- [MazeWorld README](xenoverse/mazeworld/README.md)
+- [MetaControl README](xenoverse/metacontrol/README.md)
+- [xenoverse_agents README](xenoverse_agents/README.md)
+- [AI Town README](xenoverse_agents/ai_town/README.md)
+- [Sci Agents README](xenoverse_agents/sci_agents/README.md)
 
 ## Research Positioning
 
