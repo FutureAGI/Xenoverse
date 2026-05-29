@@ -4,7 +4,7 @@ from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 
-from world_gen.models import Chemical, Reaction
+from ..world_gen.models import Chemical, Reaction
 
 R_kJ = 8.314e-3  # kJ/(mol·K)
 
