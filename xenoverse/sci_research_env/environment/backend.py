@@ -139,3 +139,35 @@ class SciResearchBackend:
         except json.JSONDecodeError as exc:
             return json.dumps({"success": False, "message": f"Invalid JSON request: {exc}"})
         return json.dumps(self.handle_request(request), ensure_ascii=False)
+
+    # === Evaluation API (god-view, not exposed to agents) ===
+
+    def eval_find_synthesis_routes(self, session_id: str, **kwargs) -> Dict[str, Any]:
+        """Find synthesis routes using full reaction graph. For evaluation only."""
+        env = self.get_session(session_id)
+        return env.find_synthesis_routes(**kwargs)
+
+    def eval_find_cheapest_medicinal_pathway(self, session_id: str, **kwargs) -> Dict[str, Any]:
+        """Find optimal medicinal pathway. For evaluation only."""
+        env = self.get_session(session_id)
+        return env.find_cheapest_medicinal_pathway(**kwargs)
+
+    def eval_score_synthesis_route(self, session_id: str, **kwargs) -> Dict[str, Any]:
+        """Score a route with full GT details (components, target_profile, generated_plan). For evaluation only."""
+        env = self.get_session(session_id)
+        return env._score_synthesis_route_full(**kwargs)
+
+    def eval_score_synthesis_plan(self, session_id: str, **kwargs) -> Dict[str, Any]:
+        """Score a plan with full GT details (components, target_profile, pathway_evaluation). For evaluation only."""
+        env = self.get_session(session_id)
+        return env._score_synthesis_plan_full(**kwargs)
+
+    def eval_get_best_submission(self, session_id: str) -> Optional[Dict[str, Any]]:
+        """Return the best submission (full unsanitized scorecard) or None. For evaluation only."""
+        env = self.get_session(session_id)
+        return env.get_best_submission()
+
+    def eval_export_world(self, session_id: str) -> Dict[str, Any]:
+        """Export the full world data for offline analysis. For evaluation only."""
+        env = self.get_session(session_id)
+        return env.get_task()

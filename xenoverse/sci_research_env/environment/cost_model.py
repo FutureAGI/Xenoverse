@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Dict, Optional
+from typing import Dict
 
 import numpy as np
 
@@ -15,6 +15,7 @@ def calculate_cost(
     temperature_C: float,
     pressure_atm: float,
     duration_s: float,
+    cost_params: Dict[str, float],
 ) -> Dict:
     raw_cost = sum(
         chemicals[cid].price_per_gram * amt
@@ -24,31 +25,35 @@ def calculate_cost(
 
     total_mass = sum(reactant_amounts_g.values())
 
-    T_excess = max(0.0, temperature_C - 25.0)
-    P_excess = max(0.0, pressure_atm - 1.0)
-    energy_cost = (
-        0.8 * (T_excess / 100.0) ** 1.5
-        + 1.5 * P_excess ** 0.7
-        + 0.1
-    ) * total_mass
+    T_dev = abs(temperature_C - 25.0)
+    if temperature_C < 25.0:
+        energy_temp = cost_params["cooling_coeff"] * (T_dev / 100.0) ** cost_params["cooling_exponent"]
+    else:
+        energy_temp = cost_params["heating_coeff"] * (T_dev / 100.0) ** cost_params["heating_exponent"]
+
+    if pressure_atm < 1.0:
+        P_dev = 1.0 - pressure_atm
+        energy_pressure = cost_params["pressure_low_coeff"] * P_dev ** cost_params["pressure_low_exp"]
+    else:
+        P_excess = pressure_atm - 1.0
+        energy_pressure = cost_params["pressure_high_coeff"] * P_excess ** cost_params["pressure_high_exp"]
+
+    energy_cost = (energy_temp + energy_pressure + 0.1) * total_mass
+
+    duration_cost = cost_params["duration_coeff"] * (duration_s / 3600.0) * total_mass ** 0.5
 
     reactant_toxicities = [
-        chemicals[cid].base_toxicity
-        for cid in reactant_amounts_g
-        if cid in chemicals
+        chemicals[cid].base_toxicity for cid in reactant_amounts_g if cid in chemicals
     ]
     product_toxicities = [
-        chemicals[pid].base_toxicity
-        for pid, _ in reaction.products
-        if pid in chemicals
+        chemicals[pid].base_toxicity for pid, _ in reaction.products if pid in chemicals
     ]
     all_toxicities = reactant_toxicities + product_toxicities
-    max_toxicity = max(all_toxicities) if all_toxicities else 0.0
-    max_toxicity = min(10.0, max_toxicity / 2.0)
+    max_toxicity = min(10.0, max(all_toxicities) / 2.0) if all_toxicities else 0.0
     toxicity_premium = 1.0 + 0.15 * max_toxicity
 
-    pressure_premium = 1.0 + 0.3 * np.log1p(pressure_atm)
-    base_equipment = 5.0 * total_mass ** 0.6
+    pressure_premium = 1.0 + cost_params["equipment_pressure_coeff"] * abs(np.log(max(pressure_atm, 0.01)))
+    base_equipment = cost_params["equipment_base"] * total_mass ** 0.6
     equipment_cost = base_equipment * pressure_premium * toxicity_premium
 
     n_products = len(reaction.products) + len(reaction.byproducts)
@@ -60,12 +65,13 @@ def calculate_cost(
     phase_complexity = len(phases)
     purification_cost = (2.0 * n_products + 3.0 * phase_complexity) * total_mass ** 0.5
 
-    total_cost = raw_cost + energy_cost + purification_cost + equipment_cost
+    total_cost = raw_cost + energy_cost + duration_cost + equipment_cost + purification_cost
 
     return {
         "total_cost": round(total_cost, 2),
         "raw_material_cost": round(raw_cost, 2),
         "energy_cost": round(energy_cost, 2),
+        "duration_cost": round(duration_cost, 2),
         "equipment_cost": round(equipment_cost, 2),
         "purification_cost": round(purification_cost, 2),
     }

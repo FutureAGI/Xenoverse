@@ -290,7 +290,8 @@ class ChemistryEnvironment:
         )
 
         cost_info = calculate_cost(
-            rxn, self._world.chemicals, reactant_ids, temperature_C, pressure_atm, duration_seconds
+            rxn, self._world.chemicals, reactant_ids, temperature_C, pressure_atm, duration_seconds,
+            self._world.cost_params,
         )
 
         log_entry = {
@@ -388,7 +389,8 @@ class ChemistryEnvironment:
 
         rxn = max(matching, key=lambda r: abs(r.delta_G_kJ))
         cost = calculate_cost(
-            rxn, self._world.chemicals, reactant_ids, temperature_C, pressure_atm, duration_seconds
+            rxn, self._world.chemicals, reactant_ids, temperature_C, pressure_atm, duration_seconds,
+            self._world.cost_params,
         )
         cost["success"] = True
         cost["reaction_id"] = rxn.id
@@ -674,7 +676,7 @@ class ChemistryEnvironment:
 
             # Simulate (no inventory side-effects)
             sim = simulate_reaction(rxn, self._world.chemicals, step_reactant_ids, T, P, dur)
-            cost = calculate_cost(rxn, self._world.chemicals, step_reactant_ids, T, P, dur)
+            cost = calculate_cost(rxn, self._world.chemicals, step_reactant_ids, T, P, dur, self._world.cost_params)
             total_process_cost += cost["total_cost"]
             total_time_s += dur
 

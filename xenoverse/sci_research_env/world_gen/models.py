@@ -92,12 +92,28 @@ class Reaction:
         )
 
 
+DEFAULT_COST_PARAMS: Dict[str, float] = {
+    "heating_coeff": 0.8,
+    "cooling_coeff": 1.2,
+    "heating_exponent": 1.5,
+    "cooling_exponent": 1.3,
+    "pressure_high_coeff": 1.5,
+    "pressure_low_coeff": 1.5,
+    "pressure_high_exp": 0.7,
+    "pressure_low_exp": 0.6,
+    "equipment_base": 5.0,
+    "equipment_pressure_coeff": 0.3,
+    "duration_coeff": 0.05,
+}
+
+
 @dataclass
 class World:
     world_id: str
     seed: int
     chemicals: Dict[str, Chemical] = field(default_factory=dict)
     reactions: Dict[str, Reaction] = field(default_factory=dict)
+    cost_params: Dict[str, float] = field(default_factory=lambda: dict(DEFAULT_COST_PARAMS))
 
     @property
     def num_layers(self) -> int:
@@ -116,6 +132,7 @@ class World:
             },
             "chemicals": {cid: c.to_dict() for cid, c in self.chemicals.items()},
             "reactions": {rid: r.to_dict() for rid, r in self.reactions.items()},
+            "cost_params": {k: round(v, 4) for k, v in self.cost_params.items()},
         }
 
     @classmethod
@@ -126,6 +143,8 @@ class World:
         )
         world.chemicals = {cid: Chemical.from_dict(cdata) for cid, cdata in data["chemicals"].items()}
         world.reactions = {rid: Reaction.from_dict(rdata) for rid, rdata in data["reactions"].items()}
+        saved_params = data.get("cost_params", {})
+        world.cost_params = {**DEFAULT_COST_PARAMS, **saved_params}
         return world
 
     def save(self, path: str) -> None:

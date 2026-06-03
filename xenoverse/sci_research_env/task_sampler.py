@@ -15,19 +15,29 @@ def _public_task_brief() -> Dict[str, Any]:
             "while controlling toxicity and experimental cost."
         ),
         "agent_instructions": [
+            "You are in an unfamiliar world whose chemistry is entirely different from the real world. "
+            "Real-world chemical knowledge does NOT apply here — compound names, reactions, and properties "
+            "bear no relation to anything you may have learned. You must discover everything empirically.",
             "Start by inspecting available functions and purchasable chemicals.",
             "Use experiments and tool calls to discover useful compounds and viable reaction routes.",
-            "Do not assume the full chemical space or reaction graph is known upfront.",
+            "The compounds and reaction pathways in this world are yet to be fully discovered.",
             "Track experimental outcomes and refine your plan based on observed results.",
-            "When requesting final adjudication, prefer score_synthesis_route unless you have a fully specified experiment plan.",
-            "For score_synthesis_route, submit a target_compound and an ordered steps list where each step contains reactants and optional catalysts.",
-            "Do not invent hidden compounds or hidden reactions; only rely on compounds and route structure supported by observed tool outputs.",
+            "Do not invent compounds or reactions; only rely on what you observe through tool outputs.",
+            "Use estimate_cost to probe the cost structure — temperature, pressure, and duration all affect cost.",
+            "When ready, use submit_solution to submit your synthesis plan with fully specified conditions for each step.",
+        ],
+        "rules": [
+            "You may call submit_solution multiple times. Your highest score across all submissions is your final result.",
+            "Each submission must include: target_compound and steps (each step specifying reactant_amounts, temperature_C, pressure_atm, duration_seconds, and optional catalyst_names).",
+            "The score is based on medicinal value, toxicity, cost, yield, and efficiency of your proposed plan.",
+            "Choosing appropriate reaction conditions (temperature, pressure, duration) matters — suboptimal conditions increase cost and reduce yield.",
         ],
         "success_criteria": [
             "Identify compounds with strong medicinal potential.",
             "Prefer lower-toxicity and lower-cost routes when alternatives exist.",
-            "Use tool outputs and experimental evidence rather than hidden assumptions.",
-            "Submit synthesis routes in the expected tool format so they can be scored.",
+            "Choose appropriate reaction conditions for each step.",
+            "Use tool outputs and experimental evidence rather than assumptions.",
+            "Submit a fully specified synthesis plan via submit_solution.",
         ],
     }
 
@@ -44,10 +54,11 @@ def _world_summary(world: World) -> Dict[str, Any]:
 
 def SciResearchTaskSampler(
     seed: Optional[int] = None,
-    layer1_min: int = 6,
-    layer1_max: int = 10,
-    last_layer_min: int = 2,
-    last_layer_max: int = 5,
+    complexity_level: Optional[str] = None,
+    layer1_min: Optional[int] = None,
+    layer1_max: Optional[int] = None,
+    last_layer_min: Optional[int] = None,
+    last_layer_max: Optional[int] = None,
     world_id: Optional[str] = None,
     max_attempts: int = 50,
     verbose: bool = False,
@@ -60,6 +71,7 @@ def SciResearchTaskSampler(
         current_seed = base_seed + attempt
         sampler = WorldSampler(
             seed=current_seed,
+            complexity_level=complexity_level,
             layer1_min=layer1_min,
             layer1_max=layer1_max,
             last_layer_min=last_layer_min,
@@ -73,6 +85,7 @@ def SciResearchTaskSampler(
                 "task_type": "SCI_RESEARCH",
                 "task_name": "procedural_chemistry_world",
                 "seed": current_seed,
+                "complexity_level": complexity_level,
                 "public_task": _public_task_brief(),
                 "world": world.to_dict(),
                 "summary": _world_summary(world),

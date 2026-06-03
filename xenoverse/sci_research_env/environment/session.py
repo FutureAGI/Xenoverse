@@ -13,214 +13,341 @@ _FUNCTION_TOOLS: List[Dict[str, Any]] = [
     {
         "type": "function",
         "function": {
-            "name": "restate_task_goal",
-            "description": "Repeat the currently published task objective and operating guidance.",
+            "name": "task_description",
+            "brief": "Get the task objective and success criteria.",
+            "description": (
+                "Returns the full task description including title, objective, agent instructions, "
+                "and success criteria. Use this at any time to review what you need to accomplish."
+            ),
             "parameters": {"type": "object", "properties": {}, "additionalProperties": False},
+            "examples": [
+                {"name": "task_description", "arguments": {}},
+                {"name": "task_description", "arguments": {}},
+            ],
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "restate_task_goal",
+            "brief": "Repeat the currently published task objective.",
+            "description": (
+                "Returns the task objective text and operating guidance. "
+                "No parameters required. Useful to re-read the goal mid-session."
+            ),
+            "parameters": {"type": "object", "properties": {}, "additionalProperties": False},
+            "examples": [
+                {"name": "restate_task_goal", "arguments": {}},
+                {"name": "restate_task_goal", "arguments": {}},
+            ],
         },
     },
     {
         "type": "function",
         "function": {
             "name": "recap_recent_activity",
-            "description": "Summarize the most recent purchases, reactions, and other experimental actions.",
+            "brief": "Summarize the most recent experimental actions.",
+            "description": (
+                "Returns a list of the most recent purchases, reactions, and other actions "
+                "recorded in the transaction log. Parameters: last_n (optional integer, default 5) "
+                "— the number of recent log entries to return. Must be >= 1."
+            ),
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "last_n": {"type": "integer", "minimum": 1},
+                    "last_n": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "description": "Number of recent activity entries to return (default: 5).",
+                    },
                 },
                 "additionalProperties": False,
             },
+            "examples": [
+                {"name": "recap_recent_activity", "arguments": {}},
+                {"name": "recap_recent_activity", "arguments": {"last_n": 10}},
+            ],
         },
     },
     {
         "type": "function",
         "function": {
             "name": "list_function_tools",
-            "description": "Return the list of currently available function tools and their descriptions.",
+            "brief": "List all available function tools.",
+            "description": (
+                "Returns the complete list of currently available function tools with their names "
+                "and descriptions. No parameters required."
+            ),
             "parameters": {"type": "object", "properties": {}, "additionalProperties": False},
+            "examples": [
+                {"name": "list_function_tools", "arguments": {}},
+                {"name": "list_function_tools", "arguments": {}},
+            ],
         },
     },
     {
         "type": "function",
         "function": {
             "name": "list_purchasable",
-            "description": "List layer-1 chemicals available for direct purchase.",
+            "brief": "List layer-1 chemicals available for purchase.",
+            "description": (
+                "Returns all layer-1 (base) chemicals that can be directly purchased, along with "
+                "their price per gram and physical state at room temperature. No parameters required."
+            ),
             "parameters": {"type": "object", "properties": {}, "additionalProperties": False},
+            "examples": [
+                {"name": "list_purchasable", "arguments": {}},
+                {"name": "list_purchasable", "arguments": {}},
+            ],
         },
     },
     {
         "type": "function",
         "function": {
             "name": "purchase",
-            "description": "Purchase a given amount of a layer-1 chemical.",
+            "brief": "Purchase a layer-1 chemical by name and amount.",
+            "description": (
+                "Purchases the specified amount (in grams) of a layer-1 chemical and adds it to "
+                "inventory. Parameters: chemical_name (required string) — exact name of the chemical "
+                "as listed by list_purchasable; amount_grams (required number, > 0) — grams to buy."
+            ),
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "chemical_name": {"type": "string"},
-                    "amount_grams": {"type": "number", "exclusiveMinimum": 0},
+                    "chemical_name": {
+                        "type": "string",
+                        "description": "Exact name of the layer-1 chemical to purchase.",
+                    },
+                    "amount_grams": {
+                        "type": "number",
+                        "exclusiveMinimum": 0,
+                        "description": "Amount in grams to purchase (must be > 0).",
+                    },
                 },
                 "required": ["chemical_name", "amount_grams"],
                 "additionalProperties": False,
             },
+            "examples": [
+                {"name": "purchase", "arguments": {"chemical_name": "Ethanol", "amount_grams": 50.0}},
+                {"name": "purchase", "arguments": {"chemical_name": "Sulfuric Acid", "amount_grams": 25.0}},
+            ],
         },
     },
     {
         "type": "function",
         "function": {
             "name": "get_inventory",
-            "description": "Return the current inventory accumulated by the agent.",
+            "brief": "Return the current inventory.",
+            "description": (
+                "Returns all chemicals currently held in the agent's inventory, with their amounts "
+                "in grams. No parameters required."
+            ),
             "parameters": {"type": "object", "properties": {}, "additionalProperties": False},
+            "examples": [
+                {"name": "get_inventory", "arguments": {}},
+                {"name": "get_inventory", "arguments": {}},
+            ],
         },
     },
     {
         "type": "function",
         "function": {
             "name": "analyze_compound",
-            "description": "Analyze a compound already present in inventory.",
+            "brief": "Analyze a compound in inventory.",
+            "description": (
+                "Returns detailed properties of a compound already present in inventory, including "
+                "physical state, molecular weight, medicinal value, toxicity, and known reaction "
+                "participation. Parameters: chemical_name (required string) — exact name of the "
+                "compound to analyze; must already be in inventory."
+            ),
             "parameters": {
                 "type": "object",
-                "properties": {"chemical_name": {"type": "string"}},
+                "properties": {
+                    "chemical_name": {
+                        "type": "string",
+                        "description": "Exact name of the compound to analyze (must be in inventory).",
+                    },
+                },
                 "required": ["chemical_name"],
                 "additionalProperties": False,
             },
+            "examples": [
+                {"name": "analyze_compound", "arguments": {"chemical_name": "Ethanol"}},
+                {"name": "analyze_compound", "arguments": {"chemical_name": "Aspirin"}},
+            ],
         },
     },
     {
         "type": "function",
         "function": {
             "name": "list_possible_reactions",
-            "description": "List reactions currently possible from available inventory and catalysts.",
+            "brief": "List reactions possible from current inventory.",
+            "description": (
+                "Returns all reactions that can be performed using chemicals currently available "
+                "in inventory (including catalysts). No parameters required. Each reaction entry "
+                "shows reactants, products, required catalysts, and suggested conditions."
+            ),
             "parameters": {"type": "object", "properties": {}, "additionalProperties": False},
+            "examples": [
+                {"name": "list_possible_reactions", "arguments": {}},
+                {"name": "list_possible_reactions", "arguments": {}},
+            ],
         },
     },
     {
         "type": "function",
         "function": {
             "name": "perform_reaction",
-            "description": "Run a reaction given reactant amounts and reaction conditions.",
+            "brief": "Execute a reaction with specified conditions.",
+            "description": (
+                "Runs a reaction consuming reactants from inventory under specified conditions. "
+                "Parameters: reactant_amounts (required object) — mapping of chemical name to grams "
+                "to consume; temperature_C (required number) — reaction temperature in Celsius; "
+                "pressure_atm (required number) — pressure in atmospheres; duration_seconds (required "
+                "number) — reaction duration in seconds; catalyst_names (optional array of strings) "
+                "— catalyst names to use (not consumed)."
+            ),
             "parameters": {
                 "type": "object",
                 "properties": {
                     "reactant_amounts": {
                         "type": "object",
                         "additionalProperties": {"type": "number"},
+                        "description": "Mapping of chemical name to amount in grams to use as reactant.",
                     },
-                    "temperature_C": {"type": "number"},
-                    "pressure_atm": {"type": "number"},
-                    "duration_seconds": {"type": "number"},
+                    "temperature_C": {
+                        "type": "number",
+                        "description": "Reaction temperature in degrees Celsius.",
+                    },
+                    "pressure_atm": {
+                        "type": "number",
+                        "description": "Reaction pressure in atmospheres.",
+                    },
+                    "duration_seconds": {
+                        "type": "number",
+                        "description": "Reaction duration in seconds.",
+                    },
                     "catalyst_names": {
                         "type": "array",
                         "items": {"type": "string"},
+                        "description": "Optional list of catalyst names (not consumed by the reaction).",
                     },
                 },
                 "required": ["reactant_amounts", "temperature_C", "pressure_atm", "duration_seconds"],
                 "additionalProperties": False,
             },
+            "examples": [
+                {
+                    "name": "perform_reaction",
+                    "arguments": {
+                        "reactant_amounts": {"Ethanol": 10.0, "Acetic Acid": 10.0},
+                        "temperature_C": 80.0,
+                        "pressure_atm": 1.0,
+                        "duration_seconds": 3600.0,
+                        "catalyst_names": ["Sulfuric Acid"],
+                    },
+                },
+                {
+                    "name": "perform_reaction",
+                    "arguments": {
+                        "reactant_amounts": {"Hydrogen": 5.0, "Nitrogen": 15.0},
+                        "temperature_C": 450.0,
+                        "pressure_atm": 200.0,
+                        "duration_seconds": 7200.0,
+                    },
+                },
+            ],
         },
     },
     {
         "type": "function",
         "function": {
             "name": "estimate_cost",
-            "description": "Estimate process cost for a candidate reaction setup before executing it.",
+            "brief": "Estimate cost for a candidate reaction setup.",
+            "description": (
+                "Estimates the total process cost (materials + energy) for a candidate reaction "
+                "without actually executing it. Parameters are identical to perform_reaction: "
+                "reactant_amounts (required object), temperature_C (required number), "
+                "pressure_atm (required number), duration_seconds (required number), "
+                "catalyst_names (optional array of strings)."
+            ),
             "parameters": {
                 "type": "object",
                 "properties": {
                     "reactant_amounts": {
                         "type": "object",
                         "additionalProperties": {"type": "number"},
+                        "description": "Mapping of chemical name to amount in grams.",
                     },
-                    "temperature_C": {"type": "number"},
-                    "pressure_atm": {"type": "number"},
-                    "duration_seconds": {"type": "number"},
+                    "temperature_C": {
+                        "type": "number",
+                        "description": "Reaction temperature in degrees Celsius.",
+                    },
+                    "pressure_atm": {
+                        "type": "number",
+                        "description": "Reaction pressure in atmospheres.",
+                    },
+                    "duration_seconds": {
+                        "type": "number",
+                        "description": "Reaction duration in seconds.",
+                    },
                     "catalyst_names": {
                         "type": "array",
                         "items": {"type": "string"},
+                        "description": "Optional list of catalyst names.",
                     },
                 },
                 "required": ["reactant_amounts", "temperature_C", "pressure_atm", "duration_seconds"],
                 "additionalProperties": False,
             },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "find_synthesis_routes",
-            "description": "Search reaction-network routes from purchasable chemicals to a target compound.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "target_compound": {"type": "string"},
-                    "max_routes": {"type": "integer", "minimum": 1},
-                    "max_steps": {"type": "integer", "minimum": 1},
-                },
-                "required": ["target_compound"],
-                "additionalProperties": False,
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "find_cheapest_medicinal_pathway",
-            "description": "Find the most cost-effective medicinal synthesis pathway in the sampled world.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "min_medicinal_value": {"type": "number"},
-                    "max_toxicity": {"type": "number"},
-                    "per_m1_g": {"type": "number"},
-                    "max_routes_per_target": {"type": "integer", "minimum": 1},
-                    "max_steps": {"type": "integer", "minimum": 1},
-                },
-                "additionalProperties": False,
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "score_synthesis_route",
-            "description": "Evaluate an agent-proposed high-level synthesis route and auto-complete practical step parameters before scoring.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "target_compound": {"type": "string"},
-                    "steps": {
-                        "type": "array",
-                        "items": {
-                            "type": "object",
-                            "properties": {
-                                "reactants": {
-                                    "type": "array",
-                                    "items": {"type": "string"},
-                                },
-                                "catalysts": {
-                                    "type": "array",
-                                    "items": {"type": "string"},
-                                },
-                            },
-                            "required": ["reactants"],
-                            "additionalProperties": False,
-                        },
+            "examples": [
+                {
+                    "name": "estimate_cost",
+                    "arguments": {
+                        "reactant_amounts": {"Ethanol": 10.0, "Acetic Acid": 10.0},
+                        "temperature_C": 80.0,
+                        "pressure_atm": 1.0,
+                        "duration_seconds": 3600.0,
                     },
-                    "per_m1_g": {"type": "number"},
                 },
-                "required": ["target_compound", "steps"],
-                "additionalProperties": False,
-            },
+                {
+                    "name": "estimate_cost",
+                    "arguments": {
+                        "reactant_amounts": {"Benzene": 20.0},
+                        "temperature_C": 150.0,
+                        "pressure_atm": 5.0,
+                        "duration_seconds": 1800.0,
+                        "catalyst_names": ["Platinum"],
+                    },
+                },
+            ],
         },
     },
+
+
     {
         "type": "function",
         "function": {
-            "name": "score_synthesis_plan",
-            "description": "Evaluate an agent-proposed synthesis plan and score it using hidden ground-truth chemistry, cost, yield, medicinal value, and toxicity.",
+            "name": "submit_solution",
+            "brief": "Submit a synthesis solution for scoring.",
+            "description": (
+                "Submit your proposed synthesis plan as a solution. The plan must fully specify "
+                "each reaction step including reactant amounts, temperature, pressure, and duration. "
+                "The system evaluates your plan based on real chemistry (cost, yield, medicinal value, "
+                "toxicity) and returns a score. You may submit multiple times — your best score is "
+                "kept as your final result. Parameters: target_compound (required string) — the "
+                "compound you aim to synthesize; steps (required array of objects) — each step "
+                "requires reactant_amounts (object mapping name to grams), temperature_C (number), "
+                "pressure_atm (number), duration_seconds (number), and optional catalyst_names "
+                "(array of strings)."
+            ),
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "target_compound": {"type": "string"},
+                    "target_compound": {
+                        "type": "string",
+                        "description": "Name of the target compound to synthesize.",
+                    },
                     "steps": {
                         "type": "array",
                         "items": {
@@ -229,13 +356,24 @@ _FUNCTION_TOOLS: List[Dict[str, Any]] = [
                                 "reactant_amounts": {
                                     "type": "object",
                                     "additionalProperties": {"type": "number"},
+                                    "description": "Mapping of reactant name to grams consumed.",
                                 },
-                                "temperature_C": {"type": "number"},
-                                "pressure_atm": {"type": "number"},
-                                "duration_seconds": {"type": "number"},
+                                "temperature_C": {
+                                    "type": "number",
+                                    "description": "Reaction temperature in Celsius.",
+                                },
+                                "pressure_atm": {
+                                    "type": "number",
+                                    "description": "Reaction pressure in atmospheres.",
+                                },
+                                "duration_seconds": {
+                                    "type": "number",
+                                    "description": "Reaction duration in seconds.",
+                                },
                                 "catalyst_names": {
                                     "type": "array",
                                     "items": {"type": "string"},
+                                    "description": "Optional catalyst names (not consumed).",
                                 },
                             },
                             "required": [
@@ -246,19 +384,65 @@ _FUNCTION_TOOLS: List[Dict[str, Any]] = [
                             ],
                             "additionalProperties": False,
                         },
+                        "description": "Ordered list of fully specified reaction steps.",
                     },
                 },
                 "required": ["target_compound", "steps"],
                 "additionalProperties": False,
             },
+            "examples": [
+                {
+                    "name": "submit_solution",
+                    "arguments": {
+                        "target_compound": "Aspirin",
+                        "steps": [
+                            {
+                                "reactant_amounts": {"Salicylic Acid": 10.0, "Acetic Anhydride": 10.0},
+                                "temperature_C": 85.0,
+                                "pressure_atm": 1.0,
+                                "duration_seconds": 1800.0,
+                                "catalyst_names": ["Phosphoric Acid"],
+                            }
+                        ],
+                    },
+                },
+                {
+                    "name": "submit_solution",
+                    "arguments": {
+                        "target_compound": "Compound-Y",
+                        "steps": [
+                            {
+                                "reactant_amounts": {"A": 20.0, "B": 15.0},
+                                "temperature_C": 120.0,
+                                "pressure_atm": 3.0,
+                                "duration_seconds": 5400.0,
+                            },
+                            {
+                                "reactant_amounts": {"C": 5.0},
+                                "temperature_C": 60.0,
+                                "pressure_atm": 1.0,
+                                "duration_seconds": 900.0,
+                            },
+                        ],
+                    },
+                },
+            ],
         },
     },
     {
         "type": "function",
         "function": {
             "name": "get_transaction_log",
-            "description": "Return the accumulated transaction and reaction log.",
+            "brief": "Return the full transaction and reaction log.",
+            "description": (
+                "Returns the complete accumulated log of all purchases, reactions, analyses, and "
+                "evaluations performed during the session. No parameters required."
+            ),
             "parameters": {"type": "object", "properties": {}, "additionalProperties": False},
+            "examples": [
+                {"name": "get_transaction_log", "arguments": {}},
+                {"name": "get_transaction_log", "arguments": {}},
+            ],
         },
     },
 ]
@@ -278,6 +462,7 @@ class SciResearchEnv(ChemistryEnvironment):
         self._inventory: Dict[str, float] = {}
         self._transaction_log: List[Dict[str, Any]] = []
         self._synthesized: set = set()
+        self._best_submission: Optional[Dict[str, Any]] = None
 
         if task is not None:
             self.set_task(task)
@@ -296,6 +481,7 @@ class SciResearchEnv(ChemistryEnvironment):
         self._inventory = {}
         self._transaction_log = []
         self._synthesized = set()
+        self._best_submission = None
         return {
             "task_type": "SCI_RESEARCH",
             "task_description": self.get_task_goal(),
@@ -314,6 +500,7 @@ class SciResearchEnv(ChemistryEnvironment):
         self._inventory = {}
         self._transaction_log = []
         self._synthesized = set()
+        self._best_submission = None
 
     def get_task(self) -> Dict[str, Any]:
         if self._task is None:
@@ -339,8 +526,8 @@ class SciResearchEnv(ChemistryEnvironment):
             "inventory_size": len(self.get_inventory()),
             "transaction_count": len(self._transaction_log),
             "notes": [
-                "Underlying compounds and reaction connectivity are intentionally hidden.",
-                "Use the available function tools to explore the environment experimentally.",
+                "Many compounds and reaction pathways are yet to be discovered.",
+                "Use the available function tools to explore and experiment.",
             ],
         }
 
@@ -353,16 +540,23 @@ class SciResearchEnv(ChemistryEnvironment):
 
     def get_function_tools_prompt(self) -> str:
         return (
-            "You are interacting with xenoverse.sci_research through function tools. "
-            "The task description is public, but the full compound space and reaction graph are hidden. "
-            "First inspect the published goal and available function tools, then buy layer-1 materials, "
+            "You are a research chemist working in a laboratory. "
+            "The compounds and reaction pathways in this world are yet to be fully discovered. "
+            "Start by reviewing your research objective, then purchase base materials, "
             "run experiments, and use observed results to discover promising synthesis routes. "
             "All tool arguments must be valid JSON objects matching the declared schemas. "
-            "For final route adjudication, prefer score_synthesis_route. Its required format is: "
-            "{target_compound: string, steps: [{reactants: [string, ...], catalysts: [string, ...]?}, ...]}. "
-            "Use score_synthesis_plan only when you want to provide a fully specified experiment plan with "
-            "reactant_amounts, temperature_C, pressure_atm, duration_seconds, and optional catalyst_names."
+            "When you are ready to submit your synthesis plan, use submit_solution with fully "
+            "specified conditions for each step: reactant_amounts, temperature_C, pressure_atm, "
+            "duration_seconds, and optional catalyst_names. You may submit multiple times — "
+            "your highest score across all submissions is kept as your final result. "
+            "The evaluation considers all specified conditions including their impact on cost and yield."
         )
+
+    def task_description(self) -> Dict[str, Any]:
+        return {
+            "success": True,
+            "task_description": self.get_task_goal(),
+        }
 
     def restate_task_goal(self) -> Dict[str, Any]:
         return {
@@ -423,7 +617,7 @@ class SciResearchEnv(ChemistryEnvironment):
 
         if not matches:
             raise ValueError(
-                "Could not match the provided route step to a hidden reaction using the supplied reactants/catalysts."
+                "No known reaction matches the supplied reactants/catalysts combination."
             )
 
         rxn = max(matches, key=lambda item: abs(item.delta_G_kJ))
@@ -441,7 +635,7 @@ class SciResearchEnv(ChemistryEnvironment):
             "catalyst_names": [self._id_to_name(cid) for cid in rxn.catalysts],
         }
 
-    def score_synthesis_route(
+    def _score_synthesis_route_full(
         self,
         target_compound: str,
         steps: List[Dict[str, Any]],
@@ -458,7 +652,7 @@ class SciResearchEnv(ChemistryEnvironment):
         except ValueError as exc:
             return {"success": False, "message": str(exc)}
 
-        scorecard = self.score_synthesis_plan(target_compound=target_compound, steps=generated_plan)
+        scorecard = self._score_synthesis_plan_full(target_compound=target_compound, steps=generated_plan)
         if not scorecard.get("success", False):
             return scorecard
 
@@ -469,7 +663,7 @@ class SciResearchEnv(ChemistryEnvironment):
         scorecard["generated_plan"] = generated_plan
         return scorecard
 
-    def score_synthesis_plan(self, target_compound: str, steps: List[Dict[str, Any]]) -> Dict[str, Any]:
+    def _score_synthesis_plan_full(self, target_compound: str, steps: List[Dict[str, Any]]) -> Dict[str, Any]:
         target_id = self._name_to_id(target_compound)
         if target_id is None:
             return {"success": False, "message": f"Unknown target compound: {target_compound}"}
@@ -581,6 +775,40 @@ class SciResearchEnv(ChemistryEnvironment):
         )
         return {"success": True, **scorecard}
 
+    def submit_solution(self, target_compound: str, steps: List[Dict[str, Any]]) -> Dict[str, Any]:
+        full = self._score_synthesis_plan_full(target_compound, steps)
+        sanitized = self._sanitize_scorecard(full)
+        if sanitized.get("success"):
+            current_score = sanitized["aggregate_score"]
+            best_score = self._best_submission["aggregate_score"] if self._best_submission else None
+            is_new_best = best_score is None or current_score > best_score
+            if is_new_best:
+                self._best_submission = full
+            sanitized["is_new_best"] = is_new_best
+            sanitized["best_score"] = current_score if is_new_best else best_score
+        return sanitized
+
+    def get_best_submission(self) -> Optional[Dict[str, Any]]:
+        return self._best_submission
+
+    @staticmethod
+    def _sanitize_scorecard(full: Dict[str, Any]) -> Dict[str, Any]:
+        if not full.get("success", False):
+            return full
+        metrics = full.get("pathway_metrics", {})
+        return {
+            "success": True,
+            "aggregate_score": full["aggregate_score"],
+            "verdict": full["verdict"],
+            "reasoning": full["reasoning"],
+            "pathway_metrics": {
+                "num_steps": metrics.get("num_steps"),
+                "target_yield_g": metrics.get("target_yield_g"),
+                "total_cost": metrics.get("total_cost"),
+                "efficiency_rating": metrics.get("efficiency_rating"),
+            },
+        }
+
     def sample_task(self, **kwargs: Any) -> Dict[str, Any]:
         return SciResearchTaskSampler(**kwargs)
 
@@ -615,6 +843,7 @@ class SciResearchEnv(ChemistryEnvironment):
 
         args = arguments or {}
         dispatch = {
+            "task_description": lambda: self.task_description(),
             "restate_task_goal": lambda: self.restate_task_goal(),
             "recap_recent_activity": lambda: self.recap_recent_activity(**args),
             "list_function_tools": lambda: self.list_function_tools(),
@@ -625,10 +854,9 @@ class SciResearchEnv(ChemistryEnvironment):
             "list_possible_reactions": lambda: self.list_possible_reactions(),
             "perform_reaction": lambda: self.perform_reaction(**args),
             "estimate_cost": lambda: self.estimate_cost(**args),
-            "find_synthesis_routes": lambda: self.find_synthesis_routes(**args),
-            "find_cheapest_medicinal_pathway": lambda: self.find_cheapest_medicinal_pathway(**args),
-            "score_synthesis_route": lambda: self.score_synthesis_route(**args),
-            "score_synthesis_plan": lambda: self.score_synthesis_plan(**args),
+
+
+            "submit_solution": lambda: self.submit_solution(**args),
             "get_transaction_log": lambda: self.get_transaction_log(),
         }
         if tool_name not in dispatch:

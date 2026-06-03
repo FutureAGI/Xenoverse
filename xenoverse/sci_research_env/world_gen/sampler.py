@@ -64,20 +64,72 @@ _ENDINGS = [
     "irnox", "axorn", "alvex", "ombrex", "olvorn", "ixelph",
 ]
 
+COMPLEXITY_PRESETS = {
+    "easy": {
+        "layer1_min": 4,
+        "layer1_max": 6,
+        "last_layer_min": 2,
+        "last_layer_max": 3,
+        "num_layers_choices": [3],
+        "extra_reactions_bonus": 2,
+    },
+    "medium": {
+        "layer1_min": 6,
+        "layer1_max": 10,
+        "last_layer_min": 2,
+        "last_layer_max": 5,
+        "num_layers_choices": [3, 4],
+        "extra_reactions_bonus": 3,
+    },
+    "hard": {
+        "layer1_min": 8,
+        "layer1_max": 14,
+        "last_layer_min": 3,
+        "last_layer_max": 7,
+        "num_layers_choices": [4, 5, 6],
+        "extra_reactions_bonus": 5,
+    },
+}
+
+_DEFAULT_NUM_LAYERS_CHOICES = [3, 4, 5]
+_DEFAULT_EXTRA_REACTIONS_BONUS = 3
+
+
 class WorldSampler:
     def __init__(
         self,
         seed: int,
-        layer1_min: int = 6,
-        layer1_max: int = 10,
-        last_layer_min: int = 2,
-        last_layer_max: int = 5,
+        complexity_level: Optional[str] = None,
+        layer1_min: Optional[int] = None,
+        layer1_max: Optional[int] = None,
+        last_layer_min: Optional[int] = None,
+        last_layer_max: Optional[int] = None,
     ):
         self.seed = seed
-        self.layer1_min = max(1, layer1_min)
-        self.layer1_max = max(self.layer1_min, layer1_max)
-        self.last_layer_min = max(1, last_layer_min)
-        self.last_layer_max = max(self.last_layer_min, last_layer_max)
+
+        if complexity_level is not None:
+            if complexity_level not in COMPLEXITY_PRESETS:
+                raise ValueError(f"Unknown complexity_level: {complexity_level}. Choose from: {list(COMPLEXITY_PRESETS.keys())}")
+            preset = COMPLEXITY_PRESETS[complexity_level]
+            self._num_layers_choices = preset["num_layers_choices"]
+            self._extra_reactions_bonus = preset["extra_reactions_bonus"]
+        else:
+            preset = None
+            self._num_layers_choices = _DEFAULT_NUM_LAYERS_CHOICES
+            self._extra_reactions_bonus = _DEFAULT_EXTRA_REACTIONS_BONUS
+
+        def _resolve(explicit, preset_key, default):
+            if explicit is not None:
+                return explicit
+            if preset is not None:
+                return preset[preset_key]
+            return default
+
+        self.layer1_min = max(1, _resolve(layer1_min, "layer1_min", 6))
+        self.layer1_max = max(self.layer1_min, _resolve(layer1_max, "layer1_max", 10))
+        self.last_layer_min = max(1, _resolve(last_layer_min, "last_layer_min", 2))
+        self.last_layer_max = max(self.last_layer_min, _resolve(last_layer_max, "last_layer_max", 5))
+
         random.seed(seed)
         np.random.seed(seed)
         self._chem_counter = 0
@@ -315,7 +367,7 @@ class WorldSampler:
     def sample_world(self, world_id: str) -> World:
         world = World(world_id=world_id, seed=self.seed)
 
-        num_layers = random.choice([3, 4, 5])
+        num_layers = random.choice(self._num_layers_choices)
         layer_sizes = self._sample_layer_sizes(num_layers)
         chemicals_by_layer: Dict[int, List[Chemical]] = {}
 
@@ -345,13 +397,27 @@ class WorldSampler:
 
             # Add extra reactions: at least as many as compounds in this layer
             n_layer = len(chems_in_layer)
-            n_extra = random.randint(n_layer, n_layer + 3)
+            n_extra = random.randint(n_layer, n_layer + self._extra_reactions_bonus)
             for _ in range(n_extra):
                 rxn = self._sample_reaction(layer, chemicals_by_layer, world.chemicals)
                 if rxn is not None:
                     world.reactions[rxn.id] = rxn
                     for pid, _ in rxn.products:
                         covered.add(pid)
+
+        world.cost_params = {
+            "heating_coeff": np.random.uniform(0.5, 1.2),
+            "cooling_coeff": np.random.uniform(0.8, 1.8),
+            "heating_exponent": np.random.uniform(1.2, 1.8),
+            "cooling_exponent": np.random.uniform(1.0, 1.6),
+            "pressure_high_coeff": np.random.uniform(1.0, 2.5),
+            "pressure_low_coeff": np.random.uniform(1.0, 2.5),
+            "pressure_high_exp": np.random.uniform(0.5, 1.0),
+            "pressure_low_exp": np.random.uniform(0.4, 0.8),
+            "equipment_base": np.random.uniform(3.0, 8.0),
+            "equipment_pressure_coeff": np.random.uniform(0.2, 0.5),
+            "duration_coeff": np.random.uniform(0.02, 0.1),
+        }
 
         return world
 
