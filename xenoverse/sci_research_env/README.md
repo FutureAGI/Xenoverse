@@ -1,5 +1,7 @@
 # Sci Research Environment
 
+English | [中文](README.zh.md)
+
 `xenoverse.sci_research_env` is a chemistry-oriented scientific-agent environment built around procedurally generated worlds. Agents explore an unknown chemical space by purchasing materials, running experiments, and discovering synthesis routes to medicinally valuable compounds.
 
 ## Structure
