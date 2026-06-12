@@ -4,9 +4,18 @@ import math
 from typing import Dict, List, Optional, Tuple
 
 from ..world_gen.models import Chemical, Reaction, World
-from .simulator import simulate_reaction, state_at, R_kJ
-from .cost_model import calculate_cost
+from .simulator import simulate_reaction, simulate_chain_reaction, state_at, R_kJ
+from .cost_model import calculate_cost, estimate_reaction_cost
 from .templates import generate_response, _medicinal_hint, _toxicity_note, PATHWAY_EFFICIENCY_NOTE
+
+
+def _round_sig(value: float, sig: int = 4) -> float:
+    """Round to significant digits — preserves info for small values."""
+    if value == 0:
+        return 0.0
+    import math as _m
+    digits = sig - int(_m.floor(_m.log10(abs(value)))) - 1
+    return round(value, max(digits, 0))
 
 
 def _approx_mw(mw: float) -> float:
@@ -51,17 +60,36 @@ class ChemistryEnvironment:
         chem = self._world.chemicals.get(cid)
         return chem.name if chem else cid
 
+    def list_equipment(self) -> Dict:
+        catalog = self._world.equipment
+        result = {}
+        for name, spec in catalog.items():
+            result[name] = {
+                "description": spec["description"],
+                "vessel_type": spec["vessel_type"],
+                "thermal_mode": spec["thermal_mode"],
+                "max_pressure_atm": spec["max_pressure_atm"],
+                "max_temp_C": spec["max_temp_C"],
+                "min_temp_C": spec["min_temp_C"],
+                "max_capacity_g": spec.get("max_capacity_g", 500.0),
+                "base_cost_per_hour": spec["base_cost_per_hour"],
+            }
+        return result
+
     def list_purchasable(self) -> Dict:
         result = {}
         for cid, chem in self._world.chemicals.items():
             if chem.layer == 1:
                 phase = state_at(chem, 25.0, 1.0)
-                result[chem.name] = {
+                entry = {
                     "name": chem.name,
                     "price_per_gram": round(chem.price_per_gram, 4),
                     "state_at_room_temp": phase,
                     "molecular_weight_approx": _approx_mw(chem.molecular_weight),
                 }
+                if chem.is_solvent:
+                    entry["role"] = "solvent"
+                result[chem.name] = entry
         return result
 
     def purchase(self, chemical_name: str, amount_grams: float) -> Dict:
@@ -106,14 +134,16 @@ class ChemistryEnvironment:
             chem = self._world.chemicals.get(cid)
             if chem is None:
                 continue
+            if chem.layer > 1 and cid not in self._synthesized:
+                continue
             phase = state_at(chem, 25.0, 1.0)
             entry = {
                 "name": chem.name,
                 "amount_g": round(grams, 4),
                 "state_at_room_temp": phase,
-                "layer": chem.layer,
             }
             if chem.layer == 1:
+                entry["purchasable"] = True
                 entry["price_per_gram"] = chem.price_per_gram
             result[chem.name] = entry
         return result
@@ -131,7 +161,7 @@ class ChemistryEnvironment:
         med_level = _biological_activity_level(chem.medicinal_value)
         med_hint = _medicinal_hint(chem.medicinal_value)
 
-        return {
+        result = {
             "success": True,
             "name": chem.name,
             "melting_point_C": round(chem.melting_point, 1),
@@ -143,6 +173,17 @@ class ChemistryEnvironment:
             "biological_activity": med_level,
             "biological_activity_note": med_hint,
         }
+        if chem.is_solvent:
+            result["role"] = "solvent"
+        if chem.solubility:
+            solubility_info = {}
+            for sid, max_g in chem.solubility.items():
+                solvent_chem = self._world.chemicals.get(sid)
+                if solvent_chem:
+                    solubility_info[solvent_chem.name] = round(max_g, 2)
+            if solubility_info:
+                result["solubility_g_per_100mL"] = solubility_info
+        return result
 
     def list_possible_reactions(self) -> Dict:
         available_ids = {cid for cid, g in self._inventory.items() if g > 1e-6}
@@ -179,7 +220,6 @@ class ChemistryEnvironment:
                 ]
 
             result[rid] = {
-                "reaction_id": rid,
                 "reactants": [
                     {"name": self._id_to_name(cid), "coefficient": coeff}
                     for cid, coeff in rxn.reactants
@@ -210,143 +250,668 @@ class ChemistryEnvironment:
 
         return f"Requires {temp_hint}; reaction is {thermo_hint}."
 
+    def _compute_purification_cost(self, reactant_ids: Dict[str, float], temperature_C: float, pressure_atm: float) -> float:
+        from .cost_model import compute_purification_cost
+        return compute_purification_cost(
+            reactant_ids, self._world.chemicals, temperature_C, pressure_atm,
+            detection_threshold=self.DETECTION_THRESHOLD_G,
+        )
+
+    DETECTION_THRESHOLD_G = 0.001
+
     def perform_reaction(
         self,
         reactant_amounts: Dict[str, float],
         temperature_C: float,
         pressure_atm: float,
         duration_seconds: float,
-        catalyst_names: Optional[List[str]] = None,
+        equipment: Optional[str] = None,
+        heating_rate_C_per_s: float = 0.0,
+        vessel_volume_L: float = 1.0,
+        recover_on_failure: bool = False,
+        recover_reactants: bool = False,
     ) -> Dict:
         name_to_id = {
             chem.name.lower(): cid
             for cid, chem in self._world.chemicals.items()
         }
 
-        reactant_ids: Dict[str, float] = {}
+        all_amounts: Dict[str, float] = {}
         for name, grams in reactant_amounts.items():
             cid = name_to_id.get(name.lower())
             if cid is None:
                 return {"success": False, "message": f"Unknown chemical: {name}"}
-            reactant_ids[cid] = grams
+            all_amounts[cid] = grams
 
-        catalyst_ids: List[str] = []
-        if catalyst_names:
-            for cname in catalyst_names:
-                cid = name_to_id.get(cname.lower())
-                if cid is None:
-                    return {"success": False, "message": f"Unknown catalyst: {cname}"}
-                catalyst_ids.append(cid)
-
-        # Check inventory sufficiency
-        for cid, needed in reactant_ids.items():
+        for cid, needed in all_amounts.items():
             available = self._inventory.get(cid, 0.0)
-            if available < needed - 1e-9:
+            if available < needed - 1e-4:
                 return {
                     "success": False,
-                    "message": f"Insufficient {self._id_to_name(cid)}: need {needed:.2f}g, have {available:.2f}g",
+                    "_no_time_loss": True,
+                    "message": f"Insufficient {self._id_to_name(cid)}: need {needed:.4f}g, have {available:.4f}g",
                 }
+            if needed > available:
+                all_amounts[cid] = available
 
-        # Find matching reactions
-        matching = self._find_matching_reactions(reactant_ids, catalyst_ids)
-        if not matching:
-            return {"success": False, "message": generate_response("reaction_fail")}
+        total_mass_g = sum(all_amounts.values())
+        if total_mass_g < 1.0:
+            return {
+                "success": False,
+                "_no_time_loss": True,
+                "message": (
+                    f"Total reactant mass {total_mass_g:.2f}g is below the minimum of 1g required "
+                    f"to perform or observe a reaction. Increase amounts."
+                ),
+            }
 
-        # Pick most thermodynamically driven
-        rxn = max(matching, key=lambda r: abs(r.delta_G_kJ))
+        catalog = self._world.equipment
+        if equipment and equipment not in catalog:
+            return {"success": False, "_no_time_loss": True, "message": f"Unknown equipment: {equipment}. Available: {list(catalog.keys())}"}
 
-        result = simulate_reaction(
-            rxn, self._world.chemicals, reactant_ids, temperature_C, pressure_atm, duration_seconds
+        equip_name = equipment or "open_beaker"
+        equip_spec = catalog[equip_name]
+        max_capacity = equip_spec.get("max_capacity_g", 500.0)
+        if total_mass_g > max_capacity:
+            return {
+                "success": False,
+                "_no_time_loss": True,
+                "message": (
+                    f"Total mass {total_mass_g:.1f}g exceeds {equip_name} capacity of {max_capacity:.0f}g. "
+                    f"Reduce amounts or use larger equipment."
+                ),
+            }
+
+        max_T = equip_spec.get("max_temp_C", 5000.0)
+        min_T = equip_spec.get("min_temp_C", -273.0)
+        max_P = equip_spec.get("max_pressure_atm", 1000.0)
+        if temperature_C > max_T or temperature_C < min_T:
+            return {
+                "success": False,
+                "_no_time_loss": True,
+                "message": (
+                    f"Temperature {temperature_C:.1f}°C is outside {equip_name} range "
+                    f"[{min_T:.0f}, {max_T:.0f}]°C. Adjust temperature or use different equipment."
+                ),
+            }
+        if pressure_atm > max_P:
+            return {
+                "success": False,
+                "_no_time_loss": True,
+                "message": (
+                    f"Pressure {pressure_atm:.2f} atm exceeds {equip_name} limit of {max_P:.0f} atm. "
+                    f"Reduce pressure or use different equipment."
+                ),
+            }
+
+        from .simulator import _find_applicable_reactions, _find_common_solvent, _dissolved_fraction
+
+        dissolution_observations = self._compute_dissolution_observations(
+            all_amounts, temperature_C, pressure_atm
         )
 
-        # Update inventory
-        for cid, consumed in result["consumed_g"].items():
-            self._inventory[cid] = max(0.0, self._inventory.get(cid, 0.0) - consumed)
+        applicable = _find_applicable_reactions(all_amounts, self._world.reactions)
+        if not applicable:
+            for cid, grams in all_amounts.items():
+                self._inventory[cid] = max(0.0, self._inventory.get(cid, 0.0) - grams)
 
-        for cid, produced in result["produced_g"].items():
-            self._inventory[cid] = self._inventory.get(cid, 0.0) + produced
-            self._synthesized.add(cid)
+            purification_cost = 0.0
+            if recover_on_failure:
+                purification_cost = self._compute_purification_cost(all_amounts, temperature_C, pressure_atm)
+                for cid, grams in all_amounts.items():
+                    self._inventory[cid] = self._inventory.get(cid, 0.0) + grams
 
-        for cid, produced in result["byproduct_g"].items():
-            self._inventory[cid] = self._inventory.get(cid, 0.0) + produced
-            self._synthesized.add(cid)
+            lost_names = {self._id_to_name(cid): round(g, 2) for cid, g in all_amounts.items()}
+            self._transaction_log.append({
+                "type": "failed_reaction",
+                "reactants_consumed": lost_names,
+                "recovered": recover_on_failure,
+                "purification_cost": purification_cost,
+            })
 
-        products_str = ", ".join(
-            f"{round(g, 3)}g of {self._id_to_name(cid)}"
-            for cid, g in result["produced_g"].items()
-            if g > 1e-6
+            msg = generate_response("reaction_fail")
+            if recover_on_failure:
+                msg += (
+                    f" Materials recovered via purification (cost: {purification_cost:.2f} credits). "
+                    f"Materials returned to inventory."
+                )
+            else:
+                msg += (
+                    f" All materials were lost in the failed attempt. "
+                    f"Lost: {lost_names}. "
+                    f"Tip: set recover_on_failure=true to pay purification cost and recover materials."
+                )
+
+            no_rxn_result = {
+                "gas_lost_g": {},
+                "temperature_history": [],
+                "consumed_g": {},
+                "reactions_fired": {},
+            }
+            phenomena = self._generate_phenomena(
+                all_amounts, no_rxn_result, temperature_C, pressure_atm,
+                dissolution_observations, set(),
+            )
+
+            return {
+                "success": False,
+                "message": msg,
+                "observations": phenomena or "No observable changes.",
+                "reactants_lost": not recover_on_failure,
+                "purification_cost": purification_cost,
+                "dissolution": dissolution_observations or None,
+            }
+
+        result = simulate_chain_reaction(
+            world=self._world,
+            initial_amounts_g=all_amounts,
+            temperature_C=temperature_C,
+            pressure_atm=pressure_atm,
+            duration_s=duration_seconds,
+            equipment=equipment,
+            heating_rate_C_per_s=heating_rate_C_per_s,
+            vessel_volume_L=vessel_volume_L,
         )
-        if not products_str:
-            products_str = "trace amounts"
+
+        for cid, grams in all_amounts.items():
+            self._inventory[cid] = max(0.0, self._inventory.get(cid, 0.0) - grams)
+
+        if result.get("equipment_failure"):
+            failure_reason = result.get("failure_reason", "Equipment limits exceeded")
+            cost_info = {"reactant_cost": 0, "condition_cost": 0, "purification_cost": 0, "total_cost": 0}
+            self._transaction_log.append({
+                "type": "reaction",
+                "reactants": {self._id_to_name(cid): g for cid, g in all_amounts.items()},
+                "temperature_C": temperature_C,
+                "pressure_atm": pressure_atm,
+                "duration_s": duration_seconds,
+                "equipment_failure": True,
+                "failure_reason": failure_reason,
+                "cost": cost_info,
+            })
+            return {
+                "success": True,
+                "message": (
+                    f"EQUIPMENT FAILURE: {failure_reason}. "
+                    f"All materials in the vessel were destroyed. "
+                    f"Final temperature: {result['final_temperature_C']}°C, "
+                    f"Final pressure: {result['final_pressure_atm']} atm."
+                ),
+                "equipment_failure": True,
+                "failure_reason": failure_reason,
+                "conversion": 0.0,
+                "products_g": {},
+                "byproducts_g": {},
+                "reactants_recovered": None,
+                "reactants_lost": {self._id_to_name(cid): round(g, 4) for cid, g in all_amounts.items()},
+                "cost": cost_info,
+                "final_temperature_C": result["final_temperature_C"],
+                "final_pressure_atm": result["final_pressure_atm"],
+                "equipment_used": result["equipment"],
+            }
+
+        final_pool = result["final_pool_g"]
+
+        catalyst_ids_all: set = set()
+        for rxn_id in result["reactions_fired"]:
+            rxn = self._world.reactions[rxn_id]
+            catalyst_ids_all.update(rxn.catalysts)
+
+        leftover_g: Dict[str, float] = {}
+        for cid, g in final_pool.items():
+            if cid in all_amounts and cid not in result["net_produced_g"]:
+                leftover_g[cid] = g
+            elif cid in catalyst_ids_all:
+                leftover_g[cid] = g
+
+        observed_products: Dict[str, float] = {}
+        observed_byproducts: Dict[str, float] = {}
+        for cid, g in result["net_produced_g"].items():
+            if g >= self.DETECTION_THRESHOLD_G:
+                observed_products[cid] = g
+
+        for cid, g in result["byproduct_g"].items():
+            if g >= self.DETECTION_THRESHOLD_G and cid not in observed_products:
+                observed_byproducts[cid] = g
+
+        all_produced = dict(result["produced_g"])
+        all_produced.update(result["byproduct_g"])
+        unobserved_count = sum(
+            1 for cid, g in all_produced.items()
+            if 0 < g < self.DETECTION_THRESHOLD_G and cid not in observed_products and cid not in observed_byproducts
+        )
+
+        mixture_components = (
+            len([g for g in leftover_g.values() if g >= self.DETECTION_THRESHOLD_G])
+            + len(observed_products)
+            + len(observed_byproducts)
+        )
+
+        from .cost_model import _phase_separation_factor, _purification_cost_per_component
+        from .simulator import state_at as _state_at
+        _mixture_phases = set()
+        for cid in list(leftover_g.keys()) + list(observed_products.keys()) + list(observed_byproducts.keys()):
+            if cid in self._world.chemicals:
+                _mixture_phases.add(_state_at(self._world.chemicals[cid], temperature_C, pressure_atm))
+        _pf = _phase_separation_factor(_mixture_phases)
+
+        def _per_component_purification(grams: float) -> float:
+            return _purification_cost_per_component(grams, mixture_components, _pf)
+
+        product_purification_cost = 0.0
+        for cid, g in observed_products.items():
+            cost = _per_component_purification(g)
+            product_purification_cost += cost
+            self._inventory[cid] = self._inventory.get(cid, 0.0) + g
+            self._synthesized.add(cid)
+
+        for cid, g in observed_byproducts.items():
+            cost = _per_component_purification(g)
+            product_purification_cost += cost
+            self._inventory[cid] = self._inventory.get(cid, 0.0) + g
+            self._synthesized.add(cid)
+
+        reactant_purification_cost = 0.0
+        reactants_recovered = {}
+        reactants_lost = {}
+        for cid, g in leftover_g.items():
+            if g < self.DETECTION_THRESHOLD_G:
+                continue
+            if recover_reactants:
+                cost = _per_component_purification(g)
+                reactant_purification_cost += cost
+                self._inventory[cid] = self._inventory.get(cid, 0.0) + g
+                reactants_recovered[self._id_to_name(cid)] = round(g, 4)
+            else:
+                reactants_lost[self._id_to_name(cid)] = round(g, 4)
+
+        total_purification_cost = product_purification_cost + reactant_purification_cost
+
+        n_observed = len(observed_products)
+        total_product_mass = sum(observed_products.values())
+        if n_observed > 0:
+            products_str = (
+                f"{n_observed} new substance(s) formed ({total_product_mass:.2f}g total)"
+            )
+            if unobserved_count > 0:
+                products_str += f" (+ {unobserved_count} trace product(s) below detection limit)"
+        elif unobserved_count > 0:
+            products_str = f"{unobserved_count} trace product(s) below detection limit"
+        else:
+            products_str = "trace amounts below detection limit"
+
+        chain_msg = ""
+        if result["chain_reaction"]:
+            num_rxns = len(result["reactions_fired"])
+            chain_msg = f" Chain reaction detected: {num_rxns} distinct reactions occurred during the experiment."
+
+        total_consumed_g = sum(result["consumed_g"].values())
+        total_produced_g = sum(g for g in result["net_produced_g"].values() if g > 0)
+        overall_conversion = total_consumed_g / max(sum(all_amounts.values()), 1e-9)
+        overall_conversion = float(min(overall_conversion, 1.0))
 
         msg = generate_response(
             "reaction_success",
             duration=duration_seconds,
             temp=temperature_C,
             pressure=pressure_atm,
-            conversion=result["conversion"],
+            conversion=overall_conversion,
             products_str=products_str,
-            reached_equilibrium=result["reached_equilibrium"],
+            reached_equilibrium=result["converged"],
         )
+        msg += chain_msg
 
-        cost_info = calculate_cost(
-            rxn, self._world.chemicals, reactant_ids, temperature_C, pressure_atm, duration_seconds,
-            self._world.cost_params,
-        )
+        gas_escaped = {
+            self._id_to_name(cid): round(g, 4)
+            for cid, g in result.get("gas_lost_g", {}).items()
+            if g >= self.DETECTION_THRESHOLD_G
+        }
+        if gas_escaped:
+            msg += f" WARNING: Gaseous products escaped from open vessel: {gas_escaped}."
+
+        if reactants_lost:
+            msg += f" Unreacted materials lost in mixture: {reactants_lost}."
+        if reactants_recovered:
+            msg += f" Unreacted materials recovered via purification: {reactants_recovered}."
+
+        if not result["reactions_fired"]:
+            cost_info = {"reactant_cost": 0, "condition_cost": 0, "purification_cost": round(total_purification_cost, 2), "total_cost": round(total_purification_cost, 2)}
+        else:
+            primary_rxn_id = max(result["reactions_fired"], key=result["reactions_fired"].get)
+            primary_rxn = self._world.reactions[primary_rxn_id]
+            rxn_reactant_ids = {cid for cid, _ in primary_rxn.reactants}
+            reactant_ids_for_cost: Dict[str, float] = {
+                cid: g for cid, g in all_amounts.items() if cid not in catalyst_ids_all
+            }
+
+            cost_info = calculate_cost(
+                primary_rxn, self._world.chemicals, reactant_ids_for_cost,
+                temperature_C, pressure_atm, duration_seconds,
+                self._world.cost_params, equipment=equipment,
+                equipment_catalog=self._world.equipment,
+            )
+            estimated_purif = cost_info["purification_cost"]
+            cost_info["purification_cost"] = round(total_purification_cost, 2)
+            cost_info["total_cost"] = round(float(cost_info["total_cost"]) - estimated_purif + total_purification_cost, 2)
 
         log_entry = {
             "type": "reaction",
-            "reaction_id": rxn.id,
-            "reactants": {self._id_to_name(cid): g for cid, g in reactant_ids.items()},
-            "catalysts": [self._id_to_name(cid) for cid in catalyst_ids],
+            "reactants": {self._id_to_name(cid): g for cid, g in all_amounts.items() if cid not in catalyst_ids_all},
+            "catalysts": {self._id_to_name(cid): round(all_amounts.get(cid, 0.0), 4) for cid in catalyst_ids_all if all_amounts.get(cid, 0.0) > 0},
             "temperature_C": temperature_C,
             "pressure_atm": pressure_atm,
             "duration_s": duration_seconds,
-            "conversion": round(result["conversion"], 4),
-            "products_produced_g": {self._id_to_name(cid): round(g, 4) for cid, g in result["produced_g"].items()},
+            "conversion": round(overall_conversion, 4),
+            "chain_reaction": result["chain_reaction"],
+            "reactions_count": len(result["reactions_fired"]),
+            "products_produced_g": {
+                self._id_to_name(cid): round(g, 4) for cid, g in observed_products.items()
+            },
+            "reactants_recovered": reactants_recovered if recover_reactants else None,
+            "reactants_lost": reactants_lost if reactants_lost else None,
+            "unobserved_trace_products": unobserved_count,
             "cost": cost_info,
         }
         self._transaction_log.append(log_entry)
 
+        phenomena = self._generate_phenomena(
+            all_amounts, result, temperature_C, pressure_atm,
+            dissolution_observations, catalyst_ids_all,
+        )
+
         return {
             "success": True,
             "message": msg,
-            "reaction_id": rxn.id,
-            "conversion": round(result["conversion"], 4),
-            "products_g": {self._id_to_name(cid): round(g, 4) for cid, g in result["produced_g"].items()},
-            "byproducts_g": {self._id_to_name(cid): round(g, 4) for cid, g in result["byproduct_g"].items() if g > 1e-6},
+            "observations": phenomena or "No observable changes.",
+            "conversion": round(overall_conversion, 4),
+            "chain_reaction": result["chain_reaction"],
+            "reactions_count": len(result["reactions_fired"]),
+            "num_products_formed": n_observed,
+            "total_product_mass_g": round(total_product_mass, 4),
+            "num_byproducts_formed": len(observed_byproducts),
+            "total_byproduct_mass_g": round(sum(observed_byproducts.values()), 4),
+            "reactants_recovered": reactants_recovered if recover_reactants else None,
+            "reactants_lost": reactants_lost if reactants_lost else None,
+            "unobserved_trace_products": unobserved_count,
+            "purification_cost": round(total_purification_cost, 2),
             "cost": cost_info,
+            "final_temperature_C": result["final_temperature_C"],
+            "final_pressure_atm": result["final_pressure_atm"],
+            "gas_escaped_g": round(sum(
+                g for g in result.get("gas_lost_g", {}).values()
+                if g >= self.DETECTION_THRESHOLD_G
+            ), 4) or None,
+            "dissolution": dissolution_observations or None,
+            "equipment_used": result["equipment"],
+            "note": "Use get_inventory to see isolated products. Use analyze_compound to learn their properties.",
+            "_products_g": {self._id_to_name(cid): round(g, 4) for cid, g in observed_products.items()},
         }
+
+    def _generate_phenomena(
+        self,
+        all_amounts: Dict[str, float],
+        result: Dict,
+        temperature_C: float,
+        pressure_atm: float,
+        dissolution_observations: Dict,
+        catalyst_ids: set,
+    ) -> List[str]:
+        from .simulator import state_at
+        chemicals = self._world.chemicals
+        phenomena = []
+
+        for cid, g in all_amounts.items():
+            if g < 0.01 or cid not in chemicals:
+                continue
+            chem = chemicals[cid]
+            name = self._id_to_name(cid)
+            phase = state_at(chem, temperature_C, pressure_atm)
+            initial_phase = state_at(chem, 25.0, 1.0)
+
+            if phase == "gas" and initial_phase != "gas":
+                bp_adj = chem.boiling_point + 10 * __import__("numpy").log(max(0.01, pressure_atm))
+                if temperature_C > bp_adj + 30:
+                    phenomena.append(
+                        f"{name} went into vigorous ebullition and completely evaporated upon contact with the heated vessel."
+                    )
+                elif temperature_C > bp_adj:
+                    phenomena.append(
+                        f"{name} began boiling and gradually evaporated at the reaction temperature."
+                    )
+            elif phase == "liquid" and initial_phase == "solid":
+                phenomena.append(f"{name} melted into a liquid at the reaction temperature.")
+            elif phase == "solid" and initial_phase == "liquid":
+                phenomena.append(f"{name} solidified at the reaction temperature.")
+
+        for solvent_name, obs in dissolution_observations.items():
+            dissolved = obs.get("dissolved_g", {})
+            undissolved = obs.get("undissolved_g", {})
+            for chem_name, g in dissolved.items():
+                if chem_name in undissolved:
+                    und_g = undissolved[chem_name]
+                    total = g + und_g
+                    frac = g / total if total > 0 else 0
+                    if frac < 0.3:
+                        phenomena.append(
+                            f"Observed {chem_name} dissolving only slightly in {solvent_name}; "
+                            f"the bulk of the material ({und_g:.2f}g) settled at the bottom of the vessel."
+                        )
+                    elif frac < 0.7:
+                        phenomena.append(
+                            f"Observed {chem_name} partially dissolving in {solvent_name} — "
+                            f"approximately {g:.2f}g went into solution while {und_g:.2f}g remained "
+                            f"as suspended particles in the mixture."
+                        )
+                    else:
+                        phenomena.append(
+                            f"Observed {chem_name} dissolving almost completely in {solvent_name}, "
+                            f"with only a small residue ({und_g:.2f}g) remaining undissolved."
+                        )
+                else:
+                    phenomena.append(
+                        f"Observed {chem_name} dissolving completely in {solvent_name}, "
+                        f"forming a clear homogeneous solution."
+                    )
+            for chem_name, g in undissolved.items():
+                if chem_name not in dissolved:
+                    phenomena.append(
+                        f"Observed {chem_name} refusing to dissolve in {solvent_name}; "
+                        f"the material ({g:.2f}g) remained as a separate phase in the vessel."
+                    )
+
+        gas_lost = result.get("gas_lost_g", {})
+        gas_lost_from_reactants = 0.0
+        gas_lost_from_products = 0.0
+        for cid, g in gas_lost.items():
+            if g >= self.DETECTION_THRESHOLD_G and cid in chemicals:
+                if cid in all_amounts:
+                    name = self._id_to_name(cid)
+                    initial_g = all_amounts.get(cid, 0.0)
+                    ratio = g / max(initial_g, g, 1e-9)
+                    if ratio > 0.9:
+                        phenomena.append(
+                            f"{name} escaped entirely as gas from the open vessel."
+                        )
+                    elif ratio > 0.3:
+                        phenomena.append(
+                            f"A significant portion of {name} ({g:.2f}g) escaped as gas from the vessel."
+                        )
+                    else:
+                        phenomena.append(
+                            f"Small bubbles of {name} were observed escaping from the vessel surface."
+                        )
+                    gas_lost_from_reactants += g
+                else:
+                    gas_lost_from_products += g
+        if gas_lost_from_products > 0.01:
+            phenomena.append(
+                f"Gaseous products ({gas_lost_from_products:.2f}g) escaped from the open vessel and were lost."
+            )
+
+        temp_history = result.get("temperature_history", [])
+        if len(temp_history) >= 2:
+            t_start = temp_history[0]["temperature_C"]
+            t_end = temp_history[-1]["temperature_C"]
+            delta = t_end - t_start
+            if delta > 50:
+                phenomena.append(
+                    f"The mixture temperature rose sharply from {t_start:.0f}°C to {t_end:.0f}°C "
+                    f"(strongly exothermic reaction)."
+                )
+            elif delta > 10:
+                phenomena.append(
+                    f"The mixture warmed noticeably from {t_start:.0f}°C to {t_end:.0f}°C "
+                    f"(exothermic reaction)."
+                )
+            elif delta < -50:
+                phenomena.append(
+                    f"The mixture cooled dramatically from {t_start:.0f}°C to {t_end:.0f}°C "
+                    f"(strongly endothermic reaction)."
+                )
+            elif delta < -10:
+                phenomena.append(
+                    f"The mixture cooled noticeably from {t_start:.0f}°C to {t_end:.0f}°C "
+                    f"(endothermic reaction)."
+                )
+
+        p_start = result.get("final_pressure_atm", pressure_atm)
+        if result.get("temperature_history"):
+            p_start_val = result["temperature_history"][0].get("pressure_atm", pressure_atm)
+            p_end_val = result.get("final_pressure_atm", pressure_atm)
+            if p_end_val > p_start_val * 1.5:
+                phenomena.append(
+                    f"Pressure in the vessel increased significantly "
+                    f"from {p_start_val:.2f} to {p_end_val:.2f} atm due to gas generation."
+                )
+
+        conversion = sum(result.get("consumed_g", {}).values()) / max(sum(all_amounts.values()), 1e-9)
+        if conversion > 0.95 and result.get("reactions_fired"):
+            phenomena.append("The reaction went to near-completion; virtually all reactants were consumed.")
+        elif conversion > 0.5 and result.get("reactions_fired"):
+            phenomena.append("A moderate amount of reactants were consumed during the reaction.")
+        elif conversion > 0.01 and result.get("reactions_fired"):
+            phenomena.append("Only a small fraction of the reactants were consumed; the reaction progressed slowly.")
+
+        net_produced = result.get("net_produced_g", {})
+        products_formed = {cid: g for cid, g in net_produced.items() if g >= self.DETECTION_THRESHOLD_G}
+        if products_formed:
+            total_g = sum(products_formed.values())
+            n_products = len(products_formed)
+            product_phases = set()
+            for cid in products_formed:
+                if cid in chemicals:
+                    product_phases.add(state_at(chemicals[cid], temperature_C, pressure_atm))
+
+            if n_products == 1:
+                phase_desc = next(iter(product_phases)) if product_phases else "unknown"
+                if total_g > 5.0:
+                    phenomena.append(
+                        f"A substantial amount of a new {phase_desc} substance ({total_g:.2f}g) formed in the vessel."
+                    )
+                elif total_g > 0.5:
+                    phenomena.append(
+                        f"A new {phase_desc} substance ({total_g:.2f}g) appeared in the reaction mixture."
+                    )
+                else:
+                    phenomena.append(
+                        f"A small amount of a new {phase_desc} substance ({total_g:.3f}g) was detected."
+                    )
+            else:
+                phase_list = sorted(product_phases)
+                phase_desc = "/".join(phase_list) if phase_list else "unknown"
+                if total_g > 5.0:
+                    phenomena.append(
+                        f"Multiple new substances ({n_products} distinct products, {total_g:.2f}g total) "
+                        f"formed in the vessel. Phases observed: {phase_desc}."
+                    )
+                elif total_g > 0.5:
+                    phenomena.append(
+                        f"Several new substances ({n_products} products, {total_g:.2f}g total) "
+                        f"appeared in the mixture ({phase_desc} phases)."
+                    )
+                else:
+                    phenomena.append(
+                        f"Trace amounts of {n_products} new substances ({total_g:.3f}g total) were detected."
+                    )
+
+            phenomena.append(
+                "Products have been isolated via purification. "
+                "Check inventory for new compounds; use analyze_compound to determine their properties."
+            )
+
+        return phenomena
+
+    def _compute_dissolution_observations(
+        self,
+        pool: Dict[str, float],
+        temperature_C: float,
+        pressure_atm: float,
+    ) -> Dict[str, Any]:
+        from .simulator import _dissolved_fraction, state_at
+        chemicals = self._world.chemicals
+        solvents_in_pool = [
+            cid for cid, g in pool.items()
+            if g > 1e-9 and cid in chemicals and chemicals[cid].is_solvent
+            and state_at(chemicals[cid], temperature_C, pressure_atm) == "liquid"
+        ]
+        if not solvents_in_pool:
+            return {}
+
+        non_solvents_in_pool = [
+            cid for cid, g in pool.items()
+            if g > 1e-9 and cid in chemicals and not chemicals[cid].is_solvent
+        ]
+        if not non_solvents_in_pool:
+            return {}
+
+        observations = {}
+        for sid in solvents_in_pool:
+            solvent_name = self._id_to_name(sid)
+            dissolved = {}
+            undissolved = {}
+            for cid in non_solvents_in_pool:
+                frac = _dissolved_fraction(cid, sid, pool, chemicals)
+                chem_name = self._id_to_name(cid)
+                g = pool.get(cid, 0.0)
+                if frac >= 0.99:
+                    dissolved[chem_name] = round(g, 3)
+                elif frac > 0.01:
+                    dissolved[chem_name] = round(g * frac, 3)
+                    undissolved[chem_name] = round(g * (1.0 - frac), 3)
+                else:
+                    undissolved[chem_name] = round(g, 3)
+            entry = {}
+            if dissolved:
+                entry["dissolved_g"] = dissolved
+            if undissolved:
+                entry["undissolved_g"] = undissolved
+            if entry:
+                observations[solvent_name] = entry
+        return observations
 
     def _find_matching_reactions(
         self,
-        reactant_ids: Dict[str, float],
-        catalyst_ids: List[str],
+        all_amounts: Dict[str, float],
+        subset_match: bool = False,
     ) -> List[Reaction]:
-        provided_reactants = set(reactant_ids.keys())
-        provided_catalysts = set(catalyst_ids)
-        # Also allow catalysts from inventory
-        inventory_catalysts = {cid for cid, g in self._inventory.items() if g > 1e-6}
-        all_catalysts = provided_catalysts | inventory_catalysts
+        provided_ids = set(all_amounts.keys())
 
         matches = []
         for rxn in self._world.reactions.values():
             rxn_reactants = {cid for cid, _ in rxn.reactants}
             rxn_catalysts = set(rxn.catalysts)
+            rxn_all_needed = rxn_reactants | rxn_catalysts
 
-            if not rxn_reactants.issubset(provided_reactants):
+            if not rxn_all_needed.issubset(provided_ids):
                 continue
-            if not provided_reactants.issubset(rxn_reactants):
-                continue
-            if not rxn_catalysts.issubset(all_catalysts):
+            if not subset_match and not provided_ids.issubset(rxn_all_needed):
                 continue
 
-            # Check stoichiometric sufficiency: need at least a trace amount of each reactant
             sufficient = True
             for cid, coeff in rxn.reactants:
                 chem = self._world.chemicals.get(cid)
                 mw = chem.molecular_weight if chem else 100.0
-                available_mol = reactant_ids.get(cid, 0.0) / mw
+                available_mol = all_amounts.get(cid, 0.0) / mw
                 if available_mol < 1e-9:
                     sufficient = False
                     break
@@ -361,43 +926,29 @@ class ChemistryEnvironment:
         temperature_C: float,
         pressure_atm: float,
         duration_seconds: float,
-        catalyst_names: Optional[List[str]] = None,
+        equipment: Optional[str] = None,
     ) -> Dict:
         name_to_id = {
             chem.name.lower(): cid
             for cid, chem in self._world.chemicals.items()
         }
 
-        reactant_ids: Dict[str, float] = {}
+        all_amounts: Dict[str, float] = {}
         for name, grams in reactant_amounts.items():
             cid = name_to_id.get(name.lower())
             if cid is None:
                 return {"success": False, "message": f"Unknown chemical: {name}"}
-            reactant_ids[cid] = grams
+            all_amounts[cid] = grams
 
-        catalyst_ids: List[str] = []
-        if catalyst_names:
-            for cname in catalyst_names:
-                cid = name_to_id.get(cname.lower())
-                if cid:
-                    catalyst_ids.append(cid)
-
-        matching = self._find_matching_reactions(reactant_ids, catalyst_ids)
-        if not matching:
-            # Try to find a close match just for cost estimate
-            return {"success": False, "message": "No matching reaction found for cost estimate."}
-
-        rxn = max(matching, key=lambda r: abs(r.delta_G_kJ))
-        cost = calculate_cost(
-            rxn, self._world.chemicals, reactant_ids, temperature_C, pressure_atm, duration_seconds,
-            self._world.cost_params,
+        cost = estimate_reaction_cost(
+            self._world.chemicals, all_amounts, temperature_C, pressure_atm, duration_seconds,
+            self._world.cost_params, equipment=equipment,
+            equipment_catalog=self._world.equipment,
         )
         cost["success"] = True
-        cost["reaction_id"] = rxn.id
         return cost
 
-    def get_transaction_log(self) -> List[Dict]:
-        return list(self._transaction_log)
+
 
     # ------------------------------------------------------------------
     # Medicinal-pathway helpers
@@ -443,10 +994,11 @@ class ChemistryEnvironment:
 
         Solves Arrhenius for T such that k(T) = 0.01 s⁻¹  (gives k·t≈3 in 300 s),
         then computes exact duration for 95% conversion at that T.
-        Both values are clamped to practical ranges.
+        Both values are clamped to practical ranges, solvent BP, and reactant BPs
+        (to avoid gas-liquid heterogeneous penalties).
         """
         A = 10.0 ** rxn.log_A_factor
-        target_k = 0.01  # s⁻¹ — gives (1 − e⁻³) ≈ 95% in 300 s
+        target_k = 0.01
         ratio = A / max(target_k, 1e-30)
         if ratio <= 1.0:
             T_K = 298.15
@@ -454,10 +1006,60 @@ class ChemistryEnvironment:
             T_K = rxn.activation_energy_kJ / (R_kJ * math.log(ratio))
         T_K = max(298.15, min(873.15, T_K))
 
+        max_solvent_bp_C = self._max_solvent_bp_for_reaction(rxn)
+        T_C = T_K - 273.15
+        if T_C > max_solvent_bp_C - 5.0:
+            T_C = max_solvent_bp_C - 5.0
+
+        min_reactant_bp = min(
+            (self._world.chemicals[cid].boiling_point
+             for cid, _ in rxn.reactants if cid in self._world.chemicals),
+            default=9999.0,
+        )
+        if T_C > min_reactant_bp - 5.0:
+            T_C = min_reactant_bp - 5.0
+
+        T_C = max(25.0, T_C)
+        T_K = T_C + 273.15
+
         k_at_T = A * math.exp(-rxn.activation_energy_kJ / (R_kJ * T_K))
-        # t such that 1 − exp(−k·t) = 0.95  →  t = −ln(0.05)/k ≈ 3/k
         duration_s = min(3600.0, max(60.0, 3.0 / max(k_at_T, 1e-30)))
-        return round(T_K - 273.15, 1), round(duration_s, 1)
+        return round(T_C, 1), round(duration_s, 1)
+
+    def _max_solvent_bp_for_reaction(self, rxn) -> float:
+        """Find the highest boiling point among solvents that can dissolve all non-solvent reactants."""
+        reactant_ids = [cid for cid, _ in rxn.reactants]
+        non_solvent_reactants = [
+            cid for cid in reactant_ids
+            if cid in self._world.chemicals and not self._world.chemicals[cid].is_solvent
+        ]
+        if not non_solvent_reactants:
+            return 600.0
+
+        solvent_reactant_ids = [
+            cid for cid in reactant_ids
+            if cid in self._world.chemicals and self._world.chemicals[cid].is_solvent
+        ]
+        best_bp = -273.0
+        for sid in solvent_reactant_ids:
+            all_dissolve = all(
+                sid in self._world.chemicals[cid].solubility
+                for cid in non_solvent_reactants
+            )
+            if all_dissolve:
+                best_bp = max(best_bp, self._world.chemicals[sid].boiling_point)
+
+        for cid, chem in self._world.chemicals.items():
+            if not chem.is_solvent or cid in reactant_ids:
+                continue
+            all_dissolve = all(
+                cid in self._world.chemicals[r].solubility
+                for r in non_solvent_reactants
+            )
+            if all_dissolve:
+                best_bp = max(best_bp, chem.boiling_point)
+
+        return best_bp if best_bp > -273.0 else 600.0
 
     def _build_pathway_steps(
         self,
@@ -466,38 +1068,92 @@ class ChemistryEnvironment:
     ) -> List[Dict]:
         """Build step dicts for evaluate_pathway from a Reaction chain.
 
-        M1 reactants are set to *per_m1_g*; non-M1 intermediates are sized to
-        whatever the previous step produced (via a lightweight pre-simulation).
+        M1 reactants and catalysts are set to *per_m1_g*; non-M1 intermediates
+        are sized to whatever the previous step produced (via pre-simulation).
+        Catalysts are included in reactant_amounts (same as agent API).
         """
         virtual_pool: Dict[str, float] = {}
         steps = []
         for rxn in rxn_chain:
             reactant_ids: Dict[str, float] = {}
+            catalyst_g: Dict[str, float] = {}
             reactant_names: Dict[str, float] = {}
             for cid, _ in rxn.reactants:
                 chem = self._world.chemicals[cid]
                 amt = per_m1_g if chem.layer == 1 else max(virtual_pool.get(cid, 0.0), 0.1)
                 reactant_ids[cid] = amt
                 reactant_names[chem.name] = amt
+            for cid in rxn.catalysts:
+                chem = self._world.chemicals[cid]
+                amt = per_m1_g * 0.1 if chem.layer == 1 else max(virtual_pool.get(cid, 0.0), 0.1)
+                catalyst_g[cid] = amt
+                reactant_names[chem.name] = amt
 
             T, dur = self._optimal_temp_for_reaction(rxn)
             P = 1.0
 
-            # Pre-simulate to propagate outputs into virtual_pool for the next step
-            sim = simulate_reaction(rxn, self._world.chemicals, reactant_ids, T, P, dur)
+            solvent_addition = self._find_best_solvent_for_step(rxn, reactant_ids, catalyst_g, T)
+            if solvent_addition:
+                sid, sol_g = solvent_addition
+                reactant_ids[sid] = reactant_ids.get(sid, 0.0) + sol_g
+                reactant_names[self._world.chemicals[sid].name] = reactant_ids[sid]
+
+            sim = simulate_reaction(rxn, self._world.chemicals, reactant_ids, T, P, dur,
+                                    catalyst_amounts_g=catalyst_g)
             for cid, consumed in sim["consumed_g"].items():
                 virtual_pool[cid] = max(0.0, virtual_pool.get(cid, 0.0) - consumed)
             for cid, produced in sim["produced_g"].items():
                 virtual_pool[cid] = virtual_pool.get(cid, 0.0) + produced
+            for cid, g in catalyst_g.items():
+                virtual_pool[cid] = virtual_pool.get(cid, 0.0) + g
 
             steps.append({
                 "reactant_amounts": reactant_names,
                 "temperature_C": T,
                 "pressure_atm": P,
                 "duration_seconds": dur,
-                "catalyst_names": [self._id_to_name(cid) for cid in rxn.catalysts],
             })
         return steps
+
+    def _find_best_solvent_for_step(
+        self, rxn, reactant_ids: Dict[str, float], catalyst_g: Dict[str, float], temperature_C: float
+    ) -> Optional[Tuple[str, float]]:
+        from .simulator import _find_common_solvent, state_at
+        pool = dict(reactant_ids)
+        for cid, g in catalyst_g.items():
+            pool[cid] = pool.get(cid, 0.0) + g
+        solvent = _find_common_solvent(rxn, self._world.chemicals, pool, temperature_C, 1.0)
+        if solvent and solvent not in ("__neat__", "__self__", None):
+            return None
+        if solvent in ("__neat__", "__self__"):
+            return None
+
+        reactant_ids_set = set(reactant_ids.keys()) | set(catalyst_g.keys())
+        non_solvent_reactants = [
+            cid for cid, _ in rxn.reactants
+            if cid in self._world.chemicals and not self._world.chemicals[cid].is_solvent
+        ]
+        total_reactant_g = sum(reactant_ids.get(cid, 0.0) for cid in non_solvent_reactants)
+
+        best_sid = None
+        best_bp = -273.0
+        for cid, chem in self._world.chemicals.items():
+            if not chem.is_solvent:
+                continue
+            if state_at(chem, temperature_C, 1.0) != "liquid":
+                continue
+            all_dissolve = all(
+                cid in self._world.chemicals[r].solubility
+                for r in non_solvent_reactants if r in self._world.chemicals
+            )
+            if all_dissolve and chem.boiling_point > best_bp:
+                best_sid = cid
+                best_bp = chem.boiling_point
+
+        if best_sid is None:
+            return None
+        solvent_g = max(total_reactant_g * 5.0, 50.0)
+        return best_sid, solvent_g
 
     # ------------------------------------------------------------------
     # Pathway helpers
@@ -505,26 +1161,15 @@ class ChemistryEnvironment:
 
     def _find_matching_reactions_with_pool(
         self,
-        reactant_ids: Dict[str, float],
-        catalyst_ids: List[str],
+        all_amounts: Dict[str, float],
         virtual_pool: Dict[str, float],
     ) -> List:
-        """Like _find_matching_reactions but uses virtual_pool for catalysts."""
-        provided_reactants = set(reactant_ids.keys())
-        all_catalysts = set(catalyst_ids) | {cid for cid, g in virtual_pool.items() if g > 1e-6}
-
-        matches = []
-        for rxn in self._world.reactions.values():
-            if {cid for cid, _ in rxn.reactants} != provided_reactants:
-                continue
-            if not set(rxn.catalysts).issubset(all_catalysts):
-                continue
-            if all(
-                reactant_ids.get(cid, 0.0) / (self._world.chemicals[cid].molecular_weight if cid in self._world.chemicals else 100.0) >= 1e-9
-                for cid, _ in rxn.reactants
-            ):
-                matches.append(rxn)
-        return matches
+        """Like _find_matching_reactions but also considers virtual_pool contents."""
+        combined = dict(all_amounts)
+        for cid, g in virtual_pool.items():
+            if g > 1e-6 and cid not in combined:
+                combined[cid] = g
+        return self._find_matching_reactions(combined)
 
     def _pathway_nl_summary(
         self,
@@ -627,37 +1272,30 @@ class ChemistryEnvironment:
             if not step_reactant_ids:
                 return {"success": False, "message": f"Step {step_num}: no reactants specified"}
 
-            # Parse catalysts
-            catalyst_ids: List[str] = []
-            for cname in step.get("catalyst_names", []):
-                cid = name_to_id.get(cname.lower())
-                if cid is None:
-                    return {"success": False, "message": f"Step {step_num}: unknown catalyst '{cname}'"}
-                catalyst_ids.append(cid)
-
             T = float(step.get("temperature_C", 25.0))
             P = float(step.get("pressure_atm", 1.0))
             dur = float(step.get("duration_seconds", 60.0))
 
-            # Find reaction — check virtual pool for catalysts first, then real inventory
-            matching = self._find_matching_reactions_with_pool(step_reactant_ids, catalyst_ids, virtual_pool)
+            # Find reaction — also considers virtual pool contents
+            matching = self._find_matching_reactions_with_pool(step_reactant_ids, virtual_pool)
             if not matching:
-                matching = self._find_matching_reactions(step_reactant_ids, catalyst_ids)
+                matching = self._find_matching_reactions(step_reactant_ids)
             if not matching:
                 names = list(step.get("reactant_amounts", {}).keys())
-                cats = step.get("catalyst_names", [])
                 return {
                     "success": False,
-                    "message": (
-                        f"Step {step_num}: no reaction found for reactants {names}"
-                        + (f" with catalysts {cats}" if cats else "") + "."
-                    ),
+                    "message": f"Step {step_num}: no reaction found for {names}.",
                 }
 
-            rxn = max(matching, key=lambda r: abs(r.delta_G_kJ))
+            rxn = min(matching, key=lambda r: r.delta_G_kJ)
+
+            # Separate catalysts from reactants
+            rxn_catalyst_ids = set(rxn.catalysts)
+            pure_reactant_ids = {cid: g for cid, g in step_reactant_ids.items() if cid not in rxn_catalyst_ids}
+            step_catalyst_g = {cid: g for cid, g in step_reactant_ids.items() if cid in rxn_catalyst_ids}
 
             # Warn if non-M1 reactants are under-supplied from the virtual pool
-            for cid, needed in step_reactant_ids.items():
+            for cid, needed in pure_reactant_ids.items():
                 chem = self._world.chemicals[cid]
                 if chem.layer > 1:
                     available = virtual_pool.get(cid, 0.0)
@@ -667,7 +1305,7 @@ class ChemistryEnvironment:
                             f"{available:.2f}g is available from earlier steps."
                         )
 
-            # Accumulate M1 cost
+            # Accumulate M1 cost (both reactants and catalysts count as purchases)
             for cid, grams in step_reactant_ids.items():
                 chem = self._world.chemicals[cid]
                 if chem.layer == 1:
@@ -675,8 +1313,9 @@ class ChemistryEnvironment:
                     total_m1_cost += chem.price_per_gram * grams
 
             # Simulate (no inventory side-effects)
-            sim = simulate_reaction(rxn, self._world.chemicals, step_reactant_ids, T, P, dur)
-            cost = calculate_cost(rxn, self._world.chemicals, step_reactant_ids, T, P, dur, self._world.cost_params)
+            sim = simulate_reaction(rxn, self._world.chemicals, pure_reactant_ids, T, P, dur,
+                                    catalyst_amounts_g=step_catalyst_g)
+            cost = calculate_cost(rxn, self._world.chemicals, pure_reactant_ids, T, P, dur, self._world.cost_params, equipment_catalog=self._world.equipment)
             total_process_cost += cost["total_cost"]
             total_time_s += dur
 
@@ -687,6 +1326,9 @@ class ChemistryEnvironment:
                 virtual_pool[cid] = virtual_pool.get(cid, 0.0) + produced
             for cid, produced in sim["byproduct_g"].items():
                 virtual_pool[cid] = virtual_pool.get(cid, 0.0) + produced
+            # Catalysts remain in pool (not consumed)
+            for cid, g in step_catalyst_g.items():
+                virtual_pool[cid] = virtual_pool.get(cid, 0.0) + g
 
             # Per-step atom economy: MW(desired products) / MW(all products incl. byproducts)
             desired_mw = sum(
@@ -802,7 +1444,7 @@ class ChemistryEnvironment:
         -------
         dict
             ``routes`` — list of route dicts, each containing:
-              - ``num_steps``, ``m1_starting_materials``
+              - ``num_steps``, ``starting_materials``
               - ``steps`` — ordered list with ``reactants_needed``,
                 ``catalysts_needed``, ``product``, ``conditions_hint``
             ``message`` — natural-language summary
@@ -820,11 +1462,11 @@ class ChemistryEnvironment:
                 "routes": [{
                     "route_id": 0,
                     "num_steps": 0,
-                    "m1_starting_materials": [target_compound],
+                    "starting_materials": [target_compound],
                     "steps": [],
                     "message": f"{target_compound} is a base chemical available for direct purchase.",
                 }],
-                "message": f"{target_compound} is a layer-1 chemical available for direct purchase.",
+                "message": f"{target_compound} is a base chemical available for direct purchase.",
             }
 
         # Index: chem_id -> reactions that produce it
@@ -901,7 +1543,7 @@ class ChemistryEnvironment:
             formatted.append({
                 "route_id": i,
                 "num_steps": len(steps_fwd),
-                "m1_starting_materials": m1_names,
+                "starting_materials": m1_names,
                 "steps": clean_steps,
                 "message": (
                     f"Route {i}: {len(steps_fwd)} step(s) to {target_compound}. "
@@ -910,7 +1552,7 @@ class ChemistryEnvironment:
             })
 
         min_steps = min(r["num_steps"] for r in formatted)
-        m1_for_shortest = next(r["m1_starting_materials"] for r in formatted if r["num_steps"] == min_steps)
+        m1_for_shortest = next(r["starting_materials"] for r in formatted if r["num_steps"] == min_steps)
         msg = generate_response(
             "route_found",
             n=len(formatted),
@@ -1006,7 +1648,7 @@ class ChemistryEnvironment:
                     "cost_per_medicinal_unit": round(cpm, 4),
                     "route": {
                         "num_steps": 0,
-                        "m1_starting_materials": [target_chem.name],
+                        "starting_materials": [target_chem.name],
                         "steps": [],
                         "note": "Direct purchase — no synthesis required.",
                     },
@@ -1046,10 +1688,11 @@ class ChemistryEnvironment:
                 # Build human-readable route steps
                 route_steps = []
                 for i, (rxn, step) in enumerate(zip(chain, steps)):
+                    catalysts_in_step = [self._id_to_name(cid) for cid in rxn.catalysts]
                     route_steps.append({
                         "step": i + 1,
                         "reactants": list(step["reactant_amounts"].keys()),
-                        "catalysts": step["catalyst_names"],
+                        "catalysts": catalysts_in_step,
                         "temperature_C": step["temperature_C"],
                         "pressure_atm": step["pressure_atm"],
                         "duration_seconds": step["duration_seconds"],
@@ -1070,7 +1713,7 @@ class ChemistryEnvironment:
                     "cost_per_medicinal_unit": round(cost_per_medicinal_unit, 4),
                     "route": {
                         "num_steps": len(chain),
-                        "m1_starting_materials": sorted(self._id_to_name(cid) for cid in m1_ids),
+                        "starting_materials": sorted(self._id_to_name(cid) for cid in m1_ids),
                         "steps": route_steps,
                     },
                     "pathway_summary": {
@@ -1109,7 +1752,7 @@ class ChemistryEnvironment:
             f"(medicinal value {best['medicinal_value']:.2f}/10, toxicity {best['base_toxicity']:.1f}/10 — {tox_label}). "
             f"Cost per medicinal unit: {best['cost_per_medicinal_unit']:.2f} cr. "
             f"{best['route']['num_steps']}-step route from "
-            f"{', '.join(best['route']['m1_starting_materials'])}. "
+            f"{', '.join(best['route']['starting_materials'])}. "
             f"Reference yield {best['pathway_summary']['target_yield_g']:.3f}g "
             f"at {best['pathway_summary']['cost_per_gram_target']:.2f} cr/g "
             f"(efficiency: {best['pathway_summary']['efficiency_rating']}). "
@@ -1126,3 +1769,498 @@ class ChemistryEnvironment:
             "num_qualifying_compounds": len(qualifying),
             "num_evaluated_routes": len(candidates),
         }
+
+    # ------------------------------------------------------------------
+    # Ground-truth optimal cost (for evaluation only)
+    # ------------------------------------------------------------------
+
+    def compute_optimal_cost(
+        self,
+        min_medicinal_value: float = 3.0,
+        max_toxicity: float = 4.0,
+        min_yield_g: float = 1.0,
+        max_time_seconds: float = 28800.0,
+        required_phase: Optional[str] = None,
+        phase_temp_C: float = 25.0,
+        max_routes_per_target: int = 5,
+        max_steps: int = 6,
+    ) -> Dict:
+        """Compute the minimum possible cost to produce min_yield_g of a qualifying compound.
+
+        This is the ground-truth "oracle" cost for evaluation. It:
+        1. Enumerates all compounds satisfying toxicity/medicinal/phase constraints
+        2. Finds all synthesis chains to each
+        3. For each chain, simulates with optimal conditions and computes
+           the EXACT cost including actual purification costs
+        4. Scales reactant amounts to meet the yield requirement
+        5. Checks time budget feasibility
+        6. Returns the minimum-cost feasible path
+        """
+        qualifying = [
+            chem for chem in self._world.chemicals.values()
+            if chem.medicinal_value >= min_medicinal_value
+            and chem.base_toxicity <= max_toxicity
+        ]
+
+        if required_phase:
+            qualifying = [
+                chem for chem in qualifying
+                if state_at(chem, phase_temp_C, 1.0) == required_phase
+            ]
+
+        if not qualifying:
+            return {
+                "success": False,
+                "found": False,
+                "message": "No qualifying compounds found.",
+                "optimal_cost": None,
+            }
+
+        best_result = None
+
+        for target_chem in qualifying:
+            if target_chem.layer == 1:
+                purchase_cost = target_chem.price_per_gram * min_yield_g
+                candidate = {
+                    "target": target_chem.name,
+                    "medicinal_value": target_chem.medicinal_value,
+                    "base_toxicity": target_chem.base_toxicity,
+                    "optimal_cost": round(purchase_cost, 4),
+                    "num_steps": 0,
+                    "total_time_seconds": 0.0,
+                    "route_detail": {"note": "Direct purchase"},
+                }
+                if best_result is None or candidate["optimal_cost"] < best_result["optimal_cost"]:
+                    best_result = candidate
+                continue
+
+            effective_steps = max(max_steps, self._world.num_layers * 2)
+            chains = self._find_reaction_chains(target_chem.id, max_routes_per_target, effective_steps)
+
+            for chain in chains:
+                result = self._compute_chain_cost(
+                    chain, target_chem.id, min_yield_g, max_time_seconds
+                )
+                if result is None:
+                    continue
+                candidate = {
+                    "target": target_chem.name,
+                    "medicinal_value": target_chem.medicinal_value,
+                    "base_toxicity": target_chem.base_toxicity,
+                    "optimal_cost": result["total_cost"],
+                    "num_steps": len(chain),
+                    "total_time_seconds": result["total_time"],
+                    "route_detail": result,
+                }
+                if best_result is None or candidate["optimal_cost"] < best_result["optimal_cost"]:
+                    best_result = candidate
+
+        for target_chem in qualifying:
+            if target_chem.layer <= 1:
+                continue
+            one_pot = self._compute_one_pot_cost(
+                target_chem.id, min_yield_g, max_time_seconds
+            )
+            if one_pot is not None:
+                candidate = {
+                    "target": target_chem.name,
+                    "medicinal_value": target_chem.medicinal_value,
+                    "base_toxicity": target_chem.base_toxicity,
+                    "optimal_cost": one_pot["total_cost"],
+                    "num_steps": 1,
+                    "total_time_seconds": one_pot["total_time"],
+                    "route_detail": one_pot,
+                }
+                if best_result is None or candidate["optimal_cost"] < best_result["optimal_cost"]:
+                    best_result = candidate
+
+        if best_result is None:
+            return {
+                "success": True,
+                "found": False,
+                "message": "No feasible synthesis route found within constraints.",
+                "optimal_cost": None,
+            }
+
+        return {
+            "success": True,
+            "found": True,
+            "optimal_cost": best_result["optimal_cost"],
+            "target": best_result["target"],
+            "medicinal_value": best_result["medicinal_value"],
+            "base_toxicity": best_result["base_toxicity"],
+            "num_steps": best_result["num_steps"],
+            "total_time_seconds": best_result["total_time_seconds"],
+            "route_detail": best_result["route_detail"],
+            "message": (
+                f"Optimal cost: {best_result['optimal_cost']:.2f} credits to produce "
+                f"{min_yield_g}g of {best_result['target']} "
+                f"(med={best_result['medicinal_value']:.2f}, tox={best_result['base_toxicity']:.2f}) "
+                f"in {best_result['num_steps']} step(s), {best_result['total_time_seconds']:.0f}s."
+            ),
+        }
+
+    def _compute_chain_cost(
+        self,
+        chain: List,
+        target_id: str,
+        min_yield_g: float,
+        max_time_seconds: float,
+    ) -> Optional[Dict]:
+        """Compute exact cost for a reaction chain to produce min_yield_g of target.
+
+        Uses binary search on M1 scaling factor to find the minimum input
+        that produces at least min_yield_g of the target, then computes
+        the exact cost including actual purification.
+
+        Returns None if the chain is infeasible (e.g., exceeds time budget).
+        """
+        scale_lo, scale_hi = 0.1, 1000.0
+        best_scale = None
+
+        for _ in range(30):
+            scale_mid = (scale_lo + scale_hi) / 2.0
+            sim_result = self._simulate_chain(chain, target_id, scale_mid)
+            if sim_result["target_yield_g"] >= min_yield_g:
+                best_scale = scale_mid
+                scale_hi = scale_mid
+            else:
+                scale_lo = scale_mid
+
+        if best_scale is None:
+            sim_hi = self._simulate_chain(chain, target_id, scale_hi)
+            if sim_hi["target_yield_g"] >= min_yield_g:
+                best_scale = scale_hi
+            else:
+                return None
+
+        result = self._simulate_chain(chain, target_id, best_scale)
+
+        if result["total_time"] > max_time_seconds:
+            return result if result["total_time"] <= max_time_seconds * 1.05 else None
+
+        return result
+
+    def _simulate_chain(
+        self,
+        chain: List,
+        target_id: str,
+        m1_scale_g: float,
+    ) -> Dict:
+        """Simulate a full chain with given M1 scale and compute exact costs.
+
+        For each step:
+        - Uses optimal temperature/duration for the reaction
+        - Computes process cost (energy, equipment, duration) from cost_model
+        - Computes actual purification cost based on post-reaction mixture
+        - Propagates products to next step via virtual pool
+
+        Does NOT recover leftover reactants (optimal strategy: waste them).
+        """
+        virtual_pool: Dict[str, float] = {}
+        total_purchase_cost = 0.0
+        total_process_cost = 0.0
+        total_purification_cost = 0.0
+        total_time = 0.0
+        step_details = []
+
+        for rxn in chain:
+            reactant_ids: Dict[str, float] = {}
+            catalyst_g: Dict[str, float] = {}
+            for cid, _ in rxn.reactants:
+                chem = self._world.chemicals[cid]
+                if chem.layer == 1:
+                    amt = m1_scale_g
+                else:
+                    amt = max(virtual_pool.get(cid, 0.0), 0.01)
+                reactant_ids[cid] = amt
+            for cid in rxn.catalysts:
+                chem = self._world.chemicals[cid]
+                if chem.layer == 1:
+                    amt = m1_scale_g * 0.1
+                else:
+                    amt = max(virtual_pool.get(cid, 0.0), 0.01)
+                catalyst_g[cid] = amt
+
+            T, dur = self._optimal_temp_for_reaction(rxn)
+            P = 1.0
+
+            all_amounts = dict(reactant_ids)
+            for cid, g in catalyst_g.items():
+                all_amounts[cid] = all_amounts.get(cid, 0.0) + g
+            chain_sim = simulate_chain_reaction(
+                self._world, all_amounts, T, P, dur,
+                equipment="autoclave",
+                catalyst_ids=set(catalyst_g.keys()),
+            )
+            sim = {
+                "consumed_g": chain_sim.get("consumed_g", {}),
+                "produced_g": chain_sim.get("produced_g", {}),
+                "byproduct_g": chain_sim.get("byproduct_g", {}),
+                "conversion": chain_sim.get("total_conversion", 0.0),
+                "k_eff": 0.0,
+            }
+
+            for cid, amt in reactant_ids.items():
+                chem = self._world.chemicals[cid]
+                if chem.layer == 1:
+                    total_purchase_cost += chem.price_per_gram * amt
+            for cid, amt in catalyst_g.items():
+                chem = self._world.chemicals[cid]
+                if chem.layer == 1:
+                    total_purchase_cost += chem.price_per_gram * amt
+
+            cost_info = calculate_cost(
+                rxn, self._world.chemicals, reactant_ids, T, P, dur, self._world.cost_params,
+                equipment_catalog=self._world.equipment,
+            )
+            process_cost = (
+                cost_info["energy_cost"]
+                + cost_info["duration_cost"]
+                + cost_info["equipment_cost"]
+            )
+            total_process_cost += process_cost
+            total_time += dur
+
+            leftover_g: Dict[str, float] = {}
+            for cid, original in reactant_ids.items():
+                consumed = sim["consumed_g"].get(cid, 0.0)
+                leftover = original - consumed
+                if leftover > self.DETECTION_THRESHOLD_G:
+                    leftover_g[cid] = leftover
+            # Catalysts remain fully in the mixture
+            for cid, g in catalyst_g.items():
+                if g > self.DETECTION_THRESHOLD_G:
+                    leftover_g[cid] = g
+
+            observed_products = {
+                cid: g for cid, g in sim["produced_g"].items()
+                if g >= self.DETECTION_THRESHOLD_G
+            }
+            observed_byproducts = {
+                cid: g for cid, g in sim["byproduct_g"].items()
+                if g >= self.DETECTION_THRESHOLD_G
+            }
+
+            mixture_components = (
+                len(leftover_g)
+                + len(observed_products)
+                + len(observed_byproducts)
+            )
+
+            step_purification = 0.0
+            if mixture_components > 1:
+                from .cost_model import _phase_separation_factor, _purification_cost_per_component
+                from .simulator import state_at as _st
+                _sp = set()
+                for _cid in list(observed_products.keys()) + list(observed_byproducts.keys()) + list(leftover_g.keys()):
+                    if _cid in self._world.chemicals:
+                        _sp.add(_st(self._world.chemicals[_cid], T, P))
+                _spf = _phase_separation_factor(_sp)
+                for g in observed_products.values():
+                    step_purification += _purification_cost_per_component(g, mixture_components, _spf)
+                for g in observed_byproducts.values():
+                    step_purification += _purification_cost_per_component(g, mixture_components, _spf)
+
+            total_purification_cost += step_purification
+
+            for cid, consumed in sim["consumed_g"].items():
+                virtual_pool[cid] = max(0.0, virtual_pool.get(cid, 0.0) - consumed)
+            for cid, produced in sim["produced_g"].items():
+                if produced >= self.DETECTION_THRESHOLD_G:
+                    virtual_pool[cid] = virtual_pool.get(cid, 0.0) + produced
+            for cid, produced in sim["byproduct_g"].items():
+                if produced >= self.DETECTION_THRESHOLD_G:
+                    virtual_pool[cid] = virtual_pool.get(cid, 0.0) + produced
+
+            step_details.append({
+                "reaction_id": rxn.id,
+                "reactants_g": {
+                    self._id_to_name(cid): _round_sig(g)
+                    for cid, g in reactant_ids.items()
+                },
+                "catalysts_g": {
+                    self._id_to_name(cid): _round_sig(g)
+                    for cid, g in catalyst_g.items()
+                } if catalyst_g else {},
+                "temperature_C": T,
+                "duration_s": dur,
+                "conversion": round(sim["conversion"], 4),
+                "products_g": {
+                    self._id_to_name(cid): _round_sig(g)
+                    for cid, g in observed_products.items()
+                },
+                "purification_cost": round(step_purification, 2),
+                "process_cost": round(process_cost, 2),
+            })
+
+        target_yield = virtual_pool.get(target_id, 0.0)
+        total_cost = total_purchase_cost + total_process_cost + total_purification_cost
+
+        return {
+            "target_yield_g": round(target_yield, 6),
+            "total_cost": round(total_cost, 4),
+            "purchase_cost": round(total_purchase_cost, 4),
+            "process_cost": round(total_process_cost, 4),
+            "purification_cost": round(total_purification_cost, 4),
+            "total_time": round(total_time, 1),
+            "m1_scale_g": round(m1_scale_g, 4),
+            "steps": step_details,
+        }
+
+    def _compute_one_pot_cost(
+        self,
+        target_id: str,
+        min_yield_g: float,
+        max_time_seconds: float,
+    ) -> Optional[Dict]:
+        """Simulate one-pot strategy: all layer-1 precursors + catalysts in a single vessel.
+
+        Tries multiple temperatures and scales to find the cheapest one-pot
+        that produces min_yield_g of the target via chain reactions.
+        """
+        from .cost_model import (
+            calculate_cost,
+            compute_purification_cost,
+            _phase_separation_factor,
+            _purification_cost_per_component,
+        )
+
+        chains = self._find_reaction_chains(target_id, max_routes=5, max_steps=6)
+        if not chains:
+            return None
+
+        chain_configs = []
+        for chain in chains:
+            m1_reactants = set()
+            catalysts = set()
+            rxns = []
+            for rxn in chain:
+                for cid, _ in rxn.reactants:
+                    if self._world.chemicals[cid].layer == 1:
+                        m1_reactants.add(cid)
+                for cat_id in rxn.catalysts:
+                    if self._world.chemicals[cat_id].layer == 1:
+                        catalysts.add(cat_id)
+                rxns.append(rxn)
+            if m1_reactants:
+                chain_configs.append((m1_reactants, catalysts, rxns))
+
+        if not chain_configs:
+            return None
+
+        best = None
+
+        needed_solvents = set()
+        for _, _, rxns in chain_configs:
+            for rxn in rxns:
+                reactant_ids = [cid for cid, _ in rxn.reactants]
+                non_solvent_reactants = [
+                    cid for cid in reactant_ids
+                    if cid in self._world.chemicals and not self._world.chemicals[cid].is_solvent
+                ]
+                for sid, chem in self._world.chemicals.items():
+                    if not chem.is_solvent:
+                        continue
+                    if all(sid in self._world.chemicals[r].solubility for r in non_solvent_reactants if r in self._world.chemicals):
+                        needed_solvents.add(sid)
+                        break
+
+        for m1_reactants, catalysts, rxns in chain_configs:
+            temps_to_try = set()
+            for rxn in rxns:
+                T, _ = self._optimal_temp_for_reaction(rxn)
+                temps_to_try.add(T)
+            temps_to_try.add(150.0)
+            temps_to_try = sorted(temps_to_try)[:3]
+
+            for T in temps_to_try:
+                dur = 300.0
+                if dur > max_time_seconds:
+                    dur = max_time_seconds
+
+                scale_lo, scale_hi = 0.5, 200.0
+                best_scale = None
+                for _ in range(12):
+                    scale_mid = (scale_lo + scale_hi) / 2.0
+                    amounts = {cid: scale_mid for cid in m1_reactants}
+                    for cat_id in catalysts:
+                        amounts[cat_id] = amounts.get(cat_id, 0) + scale_mid * 0.1
+                    for sid in needed_solvents:
+                        amounts[sid] = amounts.get(sid, 0) + scale_mid * 5.0
+
+                    sim = simulate_chain_reaction(
+                        self._world, amounts, T, 1.0, dur,
+                        equipment="sealed_flask",
+                    )
+                    target_yield = sim["final_pool_g"].get(target_id, 0.0)
+                    if target_yield >= min_yield_g:
+                        best_scale = scale_mid
+                        scale_hi = scale_mid
+                    else:
+                        scale_lo = scale_mid
+
+                if best_scale is None:
+                    amounts = {cid: scale_hi for cid in m1_reactants}
+                    for cat_id in catalysts:
+                        amounts[cat_id] = amounts.get(cat_id, 0) + scale_hi * 0.1
+                    for sid in needed_solvents:
+                        amounts[sid] = amounts.get(sid, 0) + scale_hi * 5.0
+                    sim = simulate_chain_reaction(
+                        self._world, amounts, T, 1.0, dur,
+                        equipment="sealed_flask",
+                    )
+                    target_yield = sim["final_pool_g"].get(target_id, 0.0)
+                    if target_yield >= min_yield_g:
+                        best_scale = scale_hi
+                    else:
+                        continue
+
+                amounts = {cid: best_scale for cid in m1_reactants}
+                for cat_id in catalysts:
+                    amounts[cat_id] = amounts.get(cat_id, 0) + best_scale * 0.1
+                for sid in needed_solvents:
+                    amounts[sid] = amounts.get(sid, 0) + best_scale * 5.0
+                sim = simulate_chain_reaction(
+                    self._world, amounts, T, 1.0, dur,
+                    equipment="sealed_flask",
+                )
+
+                purchase_cost = sum(
+                    self._world.chemicals[cid].price_per_gram * g
+                    for cid, g in amounts.items()
+                )
+
+                dummy_rxn = rxns[0]
+                cost_info = calculate_cost(
+                    dummy_rxn, self._world.chemicals, amounts,
+                    T, 1.0, dur, self._world.cost_params,
+                    equipment="sealed_flask",
+                    equipment_catalog=self._world.equipment,
+                )
+                process_cost = (
+                    cost_info["energy_cost"]
+                    + cost_info["duration_cost"]
+                    + cost_info["equipment_cost"]
+                )
+
+                purif_cost = compute_purification_cost(
+                    sim["final_pool_g"], self._world.chemicals, T, 1.0,
+                )
+
+                total_cost = purchase_cost + process_cost + purif_cost
+
+                if best is None or total_cost < best["total_cost"]:
+                    best = {
+                        "total_cost": round(total_cost, 4),
+                        "purchase_cost": round(purchase_cost, 4),
+                        "process_cost": round(process_cost, 4),
+                        "purification_cost": round(purif_cost, 4),
+                        "total_time": dur,
+                        "temperature_C": T,
+                        "m1_scale_g": round(best_scale, 4),
+                        "target_yield_g": round(sim["final_pool_g"].get(target_id, 0.0), 6),
+                        "strategy": "one_pot",
+                    }
+
+        return best
