@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import math
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 from .models import Chemical, Reaction, World
 
@@ -16,13 +16,16 @@ def _k_eq(rxn: Reaction, T_K: float) -> float:
 
 def _reaction_feasible(rxn: Reaction, T_K: float = _T_MAX_K, min_K: float = 1e-4) -> bool:
     """Return True if K_eq >= min_K at any temperature up to T_K."""
-    # Check at 298 K, 500 K, and T_K
     return any(_k_eq(rxn, T) >= min_K for T in (298.0, 500.0, T_K))
 
 
 class WorldValidator:
+    def __init__(self, max_toxicity: Optional[float] = None, min_medicinal: float = 2.0):
+        self._max_toxicity = max_toxicity if max_toxicity is not None else 4.0
+        self._min_medicinal = min_medicinal
+
     def validate(self, world: World) -> Tuple[bool, str]:
-        ok, msg = self._check_medicinal_compound(world)
+        ok, msg = self._check_qualifying_compound(world)
         if not ok:
             return False, msg
 
@@ -34,17 +37,25 @@ class WorldValidator:
         if not ok:
             return False, msg
 
-        ok, msg = self._check_medicinal_route_feasible(world)
+        ok, msg = self._check_qualifying_route_feasible(world)
         if not ok:
             return False, msg
 
         return True, "valid"
 
-    def _check_medicinal_compound(self, world: World) -> Tuple[bool, str]:
-        for chem in world.chemicals.values():
-            if chem.medicinal_value > 4.0 and chem.base_toxicity < 4.0:
-                return True, ""
-        return False, "No compound with medicinal_value > 4.0 and toxicity < 4.0"
+    def _qualifying_compounds(self, world: World) -> List[Chemical]:
+        return [
+            c for c in world.chemicals.values()
+            if c.medicinal_value >= self._min_medicinal and c.base_toxicity < self._max_toxicity
+        ]
+
+    def _check_qualifying_compound(self, world: World) -> Tuple[bool, str]:
+        if self._qualifying_compounds(world):
+            return True, ""
+        return False, (
+            f"No compound with medicinal_value >= {self._min_medicinal} "
+            f"and toxicity < {self._max_toxicity}"
+        )
 
     def _check_layer_constraints(self, world: World) -> Tuple[bool, str]:
         chemicals = world.chemicals
@@ -52,13 +63,11 @@ class WorldValidator:
             reactant_layers = [chemicals[cid].layer for cid, _ in rxn.reactants if cid in chemicals]
             if not reactant_layers:
                 continue
-            max_reactant_layer = max(reactant_layers)
             for pid, _ in rxn.products:
                 if pid not in chemicals:
                     continue
                 product_layer = chemicals[pid].layer
                 if product_layer > 1:
-                    # At least one reactant must be from layer product_layer - 1
                     required_layer = product_layer - 1
                     if not any(chemicals[cid].layer == required_layer for cid, _ in rxn.reactants if cid in chemicals):
                         return False, f"Reaction {rxn.id}: product {pid} (layer {product_layer}) has no reactant from layer {required_layer}"
@@ -78,15 +87,13 @@ class WorldValidator:
                 return False, f"Chemical {chem.id} ({chem.name}, layer {chem.layer}) is not produced by any reaction"
         return True, ""
 
-    def _check_medicinal_route_feasible(self, world: World) -> Tuple[bool, str]:
+    def _check_qualifying_route_feasible(self, world: World) -> Tuple[bool, str]:
         """Verify that at least one qualifying compound has a synthesis route
-        where every step has K_eq >= 1e-4 at some temperature ≤ 600 °C."""
-        qualifying = [
-            c for c in world.chemicals.values()
-            if c.medicinal_value > 4.0 and c.base_toxicity < 4.0
-        ]
+        where every step has K_eq >= 1e-4 at some temperature <= 600 C."""
+        qualifying = self._qualifying_compounds(world)
+        if not qualifying:
+            return False, "No qualifying compounds exist"
 
-        # Index reactions by product
         produces: Dict[str, List[Reaction]] = {}
         for rxn in world.reactions.values():
             for pid, _ in rxn.products:

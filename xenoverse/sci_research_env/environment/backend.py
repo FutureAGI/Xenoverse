@@ -139,3 +139,112 @@ class SciResearchBackend:
         except json.JSONDecodeError as exc:
             return json.dumps({"success": False, "message": f"Invalid JSON request: {exc}"})
         return json.dumps(self.handle_request(request), ensure_ascii=False)
+
+    # === Evaluation API (god-view, not exposed to agents) ===
+
+    def eval_find_synthesis_routes(self, session_id: str, **kwargs) -> Dict[str, Any]:
+        """Find synthesis routes using full reaction graph. For evaluation only."""
+        env = self.get_session(session_id)
+        return env.find_synthesis_routes(**kwargs)
+
+    def eval_find_cheapest_medicinal_pathway(self, session_id: str, **kwargs) -> Dict[str, Any]:
+        """Find optimal medicinal pathway. For evaluation only."""
+        env = self.get_session(session_id)
+        return env.find_cheapest_medicinal_pathway(**kwargs)
+
+    def eval_compute_optimal_cost(self, session_id: str, **kwargs) -> Dict[str, Any]:
+        """Compute ground-truth minimum cost for the task. For evaluation only."""
+        env = self.get_session(session_id)
+        constraints = env._get_constraints()
+        return env.compute_optimal_cost(
+            min_medicinal_value=kwargs.get("min_medicinal_value", constraints["min_medicinal"]),
+            max_toxicity=kwargs.get("max_toxicity", constraints["max_toxicity"]),
+            min_yield_g=kwargs.get("min_yield_g", constraints["min_yield_g"]),
+            max_time_seconds=kwargs.get("max_time_seconds", constraints["max_time_seconds"]),
+            required_phase=kwargs.get("required_phase", constraints.get("required_phase")),
+            phase_temp_C=kwargs.get("phase_temp_C", constraints.get("phase_temp_C", 25.0)),
+            max_routes_per_target=kwargs.get("max_routes_per_target", 5),
+            max_steps=kwargs.get("max_steps", 6),
+        )
+
+    def eval_get_best_submission(self, session_id: str) -> Optional[Dict[str, Any]]:
+        """Return the best submission or None. For evaluation only."""
+        env = self.get_session(session_id)
+        return env.get_best_submission()
+
+    def eval_get_session_metrics(self, session_id: str) -> Dict[str, Any]:
+        """Return session metrics (time, cost, production). For evaluation only."""
+        env = self.get_session(session_id)
+        return {
+            "elapsed_time": env._elapsed_time,
+            "time_budget": env._time_budget(),
+            "total_cost": env._total_cost,
+            "total_produced": dict(env._total_produced),
+            "finished": env._finished,
+        }
+
+    def eval_compute_score(self, session_id: str, **kwargs) -> Dict[str, Any]:
+        """Compute the final episode score. For evaluation only.
+
+        Score = min(yield_ratio, 1.0) * min(cost_efficiency, 1.0)
+        where:
+          yield_ratio = total_yield / required_yield
+          cost_efficiency = optimal_cost / actual_cost
+
+        Returns 0.0 if no qualifying compound was produced.
+        """
+        env = self.get_session(session_id)
+        constraints = env._get_constraints()
+
+        best = env.get_best_submission()
+        if best is None:
+            return {
+                "score": 0.0,
+                "reason": "no_qualifying_submission",
+                "details": {
+                    "total_cost": round(env._total_cost, 2),
+                    "elapsed_time": round(env._elapsed_time, 1),
+                },
+            }
+
+        actual_cost = best["total_experiment_cost"]
+        actual_yield = best["total_yield"]
+        required_yield = constraints["min_yield_g"]
+
+        optimal_result = env.compute_optimal_cost(
+            min_medicinal_value=constraints["min_medicinal"],
+            max_toxicity=constraints["max_toxicity"],
+            min_yield_g=required_yield,
+            max_time_seconds=constraints["max_time_seconds"],
+            required_phase=constraints.get("required_phase"),
+            phase_temp_C=constraints.get("phase_temp_C", 25.0),
+        )
+
+        if not optimal_result.get("found") or optimal_result.get("optimal_cost") is None:
+            cost_efficiency = 1.0
+        else:
+            optimal_cost = optimal_result["optimal_cost"]
+            cost_efficiency = min(optimal_cost / max(actual_cost, 1e-9), 1.0)
+
+        yield_ratio = min(actual_yield / max(required_yield, 1e-9), 1.0)
+        score = round(yield_ratio * cost_efficiency, 4)
+
+        return {
+            "score": score,
+            "reason": "scored",
+            "yield_ratio": round(yield_ratio, 4),
+            "cost_efficiency": round(cost_efficiency, 4),
+            "details": {
+                "actual_cost": actual_cost,
+                "optimal_cost": optimal_result.get("optimal_cost"),
+                "actual_yield": actual_yield,
+                "required_yield": required_yield,
+                "target_compound": best["target_compound"],
+                "elapsed_time": round(env._elapsed_time, 1),
+            },
+        }
+
+    def eval_export_world(self, session_id: str) -> Dict[str, Any]:
+        """Export the full world data for offline analysis. For evaluation only."""
+        env = self.get_session(session_id)
+        return env.get_task()
