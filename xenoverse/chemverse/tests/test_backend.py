@@ -4,7 +4,7 @@ import json
 import tempfile
 import unittest
 
-from xenoverse.sci_research import LegacyChemistryEnvironment, SciResearchBackend
+from xenoverse.chemverse import LegacyChemistryEnvironment, SciResearchBackend
 
 
 class SciResearchBackendTests(unittest.TestCase):

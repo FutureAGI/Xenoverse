@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Interactive sci_research environment demo: prints task_description and function specs as JSON."""
+"""Interactive Chemverse demo: prints task_description and function specs as JSON."""
 
 from __future__ import annotations
 
