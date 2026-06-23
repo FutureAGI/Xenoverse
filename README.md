@@ -11,7 +11,7 @@ Xenoverse is a collection of procedurally generated environments for benchmarkin
 - Diversity over memorization: agents are evaluated across many world-generation processes rather than one static task set.
 - Open-ended evaluation: procedural tasks reduce benchmark overfitting.
 - Reusable infrastructure: environment families share one namespace and similar task-sampling workflows.
-- Agent-oriented extensions: the repository also contains scientific-agent and town-style environment workspaces.
+- Agent-oriented extensions: the repository also includes chemistry-agent and town-style environment workspaces.
 
 ### Main Modules
 
@@ -23,7 +23,7 @@ Xenoverse is a collection of procedurally generated environments for benchmarkin
 | `xenoverse.metalang` | Synthetic language | Procedural pseudo-language generation |
 | `xenoverse.mazeworld` | 3D navigation | Procedural maze navigation |
 | `xenoverse.metacontrol` | Randomized control | Random cartpole, acrobot, and humanoid-style tasks |
-| `xenoverse.sci_research_env` | Scientific agents | Chemistry-world generation, tool-driven interaction, and route scoring |
+| `xenoverse.chemverse` | Chemistry agents | Chemistry-world generation, tool-driven interaction, and route scoring |
 | `xenoverse.ai_town_env` | Town-style agents | Agent-oriented town environment design workspace |
 
 ## Repository Layout
@@ -39,7 +39,7 @@ Xenoverse/
 
 - `xenoverse/` is the installable Python package.
 - Package code and package-level documentation live under `xenoverse/`.
-- The current package includes `anymdp`, `linds`, `anyhvac`, `metalang`, `mazeworld`, `metacontrol`, `sci_research_env`, `ai_town_env`, and `utils`.
+- The current package includes `anymdp`, `linds`, `anyhvac`, `metalang`, `mazeworld`, `metacontrol`, `chemverse`, `ai_town_env`, and `utils`.
 
 ## Installation
 
@@ -76,6 +76,20 @@ import xenoverse.anymdp
 env = gym.make("anymdp-v0", max_steps=5000)
 observation, info = env.reset()
 ```
+
+## Chemverse
+
+`xenoverse.chemverse` is the chemistry-agent environment family in this repository. It provides procedurally generated chemistry worlds, tool-based interaction, and backend-driven task evaluation.
+
+Quick entrypoints:
+
+```bash
+python -m xenoverse.chemverse.demo
+python -m xenoverse.chemverse.generate_worlds --list
+python -m xenoverse.chemverse.tests.test_backend
+```
+
+See [xenoverse/chemverse/README.md](xenoverse/chemverse/README.md) for module structure, backend usage, scoring, and world generation details.
 
 ## Research Positioning
 

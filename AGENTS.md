@@ -1,7 +1,7 @@
 # Repository Guidelines
 
 ## Project Structure & Module Organization
-`xenoverse/` is the installable Python package. Each environment family lives in its own subpackage, including `anymdp/`, `anyhvac/`, `linds/`, `mazeworld/`, `metacontrol/`, `metalang/`, and `sci_research/`. Shared helpers belong in `xenoverse/utils/`. Module-level documentation is kept close to code in files like `xenoverse/anymdp/README.md`.
+`xenoverse/` is the installable Python package. Each environment family lives in its own subpackage, including `anymdp/`, `anyhvac/`, `linds/`, `mazeworld/`, `metacontrol/`, `metalang/`, and `chemverse/`. Shared helpers belong in `xenoverse/utils/`. Module-level documentation is kept close to code in files like `xenoverse/anymdp/README.md`.
 
 Tests are currently local to modules instead of a single top-level suite. Existing examples live in `xenoverse/mazeworld/tests/` and `xenoverse/metacontrol/tests/`. Keep new assets next to the package that uses them, for example `xenoverse/mazeworld/envs/img/`.
 

@@ -14,11 +14,11 @@ xenoverse/
   ai_town_env/
   anyhvac/
   anymdp/
+  chemverse/
   linds/
   mazeworld/
   metacontrol/
   metalang/
-  sci_research_env/
   utils/
 ```
 
@@ -32,14 +32,16 @@ xenoverse/
 | `xenoverse.metalang` | `xenoverse/metalang/` | Synthetic language generation tasks | `task_sampler.py`, `metalangv1.py`, `metalangv2.py`, `metalangv3.py` |
 | `xenoverse.mazeworld` | `xenoverse/mazeworld/` | 3D procedural maze navigation | `envs/task_sampler.py`, `envs/maze_continuous_3d.py` |
 | `xenoverse.metacontrol` | `xenoverse/metacontrol/` | Randomized classic-control and humanoid-style tasks | `random_cartpole.py`, `random_acrobot.py`, `random_humanoid.py` |
-| `xenoverse.sci_research_env` | `xenoverse/sci_research_env/` | Scientific-agent chemistry environment with tool-driven interaction and scoring | `task_sampler.py`, `environment/session.py`, `environment/backend.py`, `demo.py` |
+| `xenoverse.chemverse` | `xenoverse/chemverse/` | Chemistry-agent environment with tool-driven interaction and route scoring | `task_sampler.py`, `environment/session.py`, `environment/backend.py`, `demo.py` |
 | `xenoverse.ai_town_env` | `xenoverse/ai_town_env/` | Town-style multi-agent environment design workspace | `README.md`, `AI_TOWN_DESIGN.md` |
 | `xenoverse.utils` | `xenoverse/utils/` | Shared internal utilities | `__init__.py`, `tools.py`, `grid_ops.py` |
 
 ## Notes
 
 - Module-specific usage guides live beside the code in each subdirectory.
-- The scientific-agent package path is `xenoverse/sci_research_env/`.
+- The chemistry-agent package path is `xenoverse/chemverse/`.
+- The public package name changed from `sci_research_env` to `chemverse`.
+- Internal class names such as `SciResearchBackend` and `SciResearchEnv` are still kept for compatibility.
 - The town-style workspace path is `xenoverse/ai_town_env/`.
 - Older `xenoverse_agents/...` references do not match the current repository layout.
 
@@ -51,5 +53,5 @@ xenoverse/
 - [MetaLang](metalang/README.md)
 - [MazeWorld](mazeworld/README.md)
 - [MetaControl](metacontrol/README.md)
-- [Sci Research Env](sci_research_env/README.md)
+- [Chemverse](chemverse/README.md)
 - [AI Town Env](ai_town_env/README.md)
