@@ -1,0 +1,1565 @@
+{
+  "world_id": "sci_world_2003",
+  "metadata": {
+    "num_layers": 4,
+    "seed": 2003,
+    "num_chemicals": 26,
+    "num_reactions": 30
+  },
+  "chemicals": {
+    "C001": {
+      "id": "C001",
+      "name": "Vrelkixon",
+      "layer": 1,
+      "molecular_weight": 110.07,
+      "melting_point": -68.91,
+      "boiling_point": 108.42,
+      "base_toxicity": 0.652,
+      "medicinal_expected": 0.0,
+      "medicinal_efficacy": 0.0,
+      "price_per_gram": 0.0706,
+      "heat_capacity_J_per_gK": 3.2972,
+      "latent_heat_fusion_J_per_g": 104.03,
+      "latent_heat_vaporization_J_per_g": 904.36,
+      "clausius_C": 35.23,
+      "is_solvent": true
+    },
+    "C002": {
+      "id": "C002",
+      "name": "Strevirveth",
+      "layer": 1,
+      "molecular_weight": 144.56,
+      "melting_point": -28.49,
+      "boiling_point": 110.37,
+      "base_toxicity": 0.352,
+      "medicinal_expected": 0.0,
+      "medicinal_efficacy": 0.0,
+      "price_per_gram": 0.0618,
+      "heat_capacity_J_per_gK": 2.9458,
+      "latent_heat_fusion_J_per_g": 154.94,
+      "latent_heat_vaporization_J_per_g": 826.94,
+      "clausius_C": 45.52,
+      "is_solvent": true
+    },
+    "C003": {
+      "id": "C003",
+      "name": "Yornemarxen",
+      "layer": 1,
+      "molecular_weight": 34.73,
+      "melting_point": -95.84,
+      "boiling_point": 155.64,
+      "base_toxicity": 1.044,
+      "medicinal_expected": 0.0,
+      "medicinal_efficacy": 0.0,
+      "price_per_gram": 0.0305,
+      "heat_capacity_J_per_gK": 3.2166,
+      "latent_heat_fusion_J_per_g": 174.23,
+      "latent_heat_vaporization_J_per_g": 744.97,
+      "clausius_C": 41.69,
+      "is_solvent": true
+    },
+    "C004": {
+      "id": "C004",
+      "name": "Snexixorn",
+      "layer": 1,
+      "molecular_weight": 62.1,
+      "melting_point": -116.61,
+      "boiling_point": 189.42,
+      "base_toxicity": 0.643,
+      "medicinal_expected": 0.0,
+      "medicinal_efficacy": 0.0,
+      "price_per_gram": 0.0343,
+      "heat_capacity_J_per_gK": 2.8234,
+      "latent_heat_fusion_J_per_g": 151.61,
+      "latent_heat_vaporization_J_per_g": 794.29,
+      "clausius_C": 35.39,
+      "is_solvent": true
+    },
+    "C005": {
+      "id": "C005",
+      "name": "Skelfixelph",
+      "layer": 4,
+      "molecular_weight": 539.45,
+      "melting_point": 6.65,
+      "boiling_point": 195.96,
+      "base_toxicity": 2.324,
+      "medicinal_expected": 4.77,
+      "medicinal_efficacy": 0.8347,
+      "price_per_gram": null,
+      "heat_capacity_J_per_gK": 2.0509,
+      "latent_heat_fusion_J_per_g": 88.52,
+      "latent_heat_vaporization_J_per_g": 959.45,
+      "clausius_C": 62.28,
+      "is_solvent": false,
+      "solubility": {
+        "C004": 4.46
+      }
+    },
+    "C006": {
+      "id": "C006",
+      "name": "Gwilvirnox",
+      "layer": 1,
+      "molecular_weight": 184.63,
+      "melting_point": -39.17,
+      "boiling_point": 340.27,
+      "base_toxicity": 3.089,
+      "medicinal_expected": 1.76,
+      "medicinal_efficacy": 0.006,
+      "price_per_gram": 4.5159,
+      "heat_capacity_J_per_gK": 2.4237,
+      "latent_heat_fusion_J_per_g": 56.89,
+      "latent_heat_vaporization_J_per_g": 504.49,
+      "clausius_C": 45.17,
+      "is_solvent": false,
+      "solubility": {
+        "C003": 34.42,
+        "C001": 1.7,
+        "C004": 4.0
+      }
+    },
+    "C007": {
+      "id": "C007",
+      "name": "Blaxornex",
+      "layer": 1,
+      "molecular_weight": 224.44,
+      "melting_point": 9.1,
+      "boiling_point": 210.62,
+      "base_toxicity": 0.105,
+      "medicinal_expected": 0.5,
+      "medicinal_efficacy": 0.0018,
+      "price_per_gram": 18.4575,
+      "heat_capacity_J_per_gK": 2.1498,
+      "latent_heat_fusion_J_per_g": 143.02,
+      "latent_heat_vaporization_J_per_g": 201.45,
+      "clausius_C": 45.22,
+      "is_solvent": false,
+      "solubility": {
+        "C004": 63.64,
+        "C002": 6.76,
+        "C001": 2.48
+      }
+    },
+    "C008": {
+      "id": "C008",
+      "name": "Gwernorvixeth",
+      "layer": 1,
+      "molecular_weight": 132.15,
+      "melting_point": 9.59,
+      "boiling_point": 166.67,
+      "base_toxicity": 0.887,
+      "medicinal_expected": 0.422,
+      "medicinal_efficacy": 0.0099,
+      "price_per_gram": 0.737,
+      "heat_capacity_J_per_gK": 1.2033,
+      "latent_heat_fusion_J_per_g": 78.92,
+      "latent_heat_vaporization_J_per_g": 388.71,
+      "clausius_C": 54.11,
+      "is_solvent": false,
+      "solubility": {
+        "C004": 46.57,
+        "C001": 4.57
+      }
+    },
+    "C009": {
+      "id": "C009",
+      "name": "Quavoxen7",
+      "layer": 1,
+      "molecular_weight": 127.39,
+      "melting_point": -9.3,
+      "boiling_point": 215.1,
+      "base_toxicity": 6.289,
+      "medicinal_expected": 0.09,
+      "medicinal_efficacy": 0.0898,
+      "price_per_gram": 3.5247,
+      "heat_capacity_J_per_gK": 2.5755,
+      "latent_heat_fusion_J_per_g": 93.0,
+      "latent_heat_vaporization_J_per_g": 408.4,
+      "clausius_C": 58.57,
+      "is_solvent": false,
+      "solubility": {
+        "C004": 13.45,
+        "C001": 12.94
+      }
+    },
+    "C010": {
+      "id": "C010",
+      "name": "Vrethyx",
+      "layer": 1,
+      "molecular_weight": 378.37,
+      "melting_point": 18.05,
+      "boiling_point": 270.04,
+      "base_toxicity": 3.002,
+      "medicinal_expected": 0.085,
+      "medicinal_efficacy": 0.4574,
+      "price_per_gram": 2.8434,
+      "heat_capacity_J_per_gK": 1.3052,
+      "latent_heat_fusion_J_per_g": 97.85,
+      "latent_heat_vaporization_J_per_g": 349.57,
+      "clausius_C": 63.32,
+      "is_solvent": false,
+      "solubility": {
+        "C003": 49.61,
+        "C004": 13.15,
+        "C001": 5.46
+      }
+    },
+    "C011": {
+      "id": "C011",
+      "name": "Gretholveth",
+      "layer": 1,
+      "molecular_weight": 75.59,
+      "melting_point": 18.04,
+      "boiling_point": 341.56,
+      "base_toxicity": 3.68,
+      "medicinal_expected": 1.081,
+      "medicinal_efficacy": 0.1303,
+      "price_per_gram": 1.41,
+      "heat_capacity_J_per_gK": 2.3748,
+      "latent_heat_fusion_J_per_g": 101.64,
+      "latent_heat_vaporization_J_per_g": 272.47,
+      "clausius_C": 63.19,
+      "is_solvent": false,
+      "solubility": {
+        "C004": 31.88,
+        "C001": 1.49,
+        "C002": 3.19,
+        "C003": 1.08
+      }
+    },
+    "C012": {
+      "id": "C012",
+      "name": "Grexithon",
+      "layer": 1,
+      "molecular_weight": 154.61,
+      "melting_point": 31.28,
+      "boiling_point": 126.16,
+      "base_toxicity": 6.75,
+      "medicinal_expected": 2.219,
+      "medicinal_efficacy": 0.0012,
+      "price_per_gram": 1.9807,
+      "heat_capacity_J_per_gK": 1.3932,
+      "latent_heat_fusion_J_per_g": 315.78,
+      "latent_heat_vaporization_J_per_g": 279.37,
+      "clausius_C": 69.19,
+      "is_solvent": false,
+      "solubility": {
+        "C003": 66.03,
+        "C002": 6.93,
+        "C004": 4.57,
+        "C001": 2.75
+      }
+    },
+    "C013": {
+      "id": "C013",
+      "name": "Brethormal9",
+      "layer": 1,
+      "molecular_weight": 251.21,
+      "melting_point": -33.44,
+      "boiling_point": 266.78,
+      "base_toxicity": 1.9,
+      "medicinal_expected": 0.205,
+      "medicinal_efficacy": 0.0058,
+      "price_per_gram": 7.9106,
+      "heat_capacity_J_per_gK": 1.7989,
+      "latent_heat_fusion_J_per_g": 208.75,
+      "latent_heat_vaporization_J_per_g": 472.07,
+      "clausius_C": 48.4,
+      "is_solvent": false,
+      "solubility": {
+        "C004": 3.14,
+        "C003": 7.08
+      }
+    },
+    "C014": {
+      "id": "C014",
+      "name": "Quethovex",
+      "layer": 1,
+      "molecular_weight": 48.58,
+      "melting_point": 16.34,
+      "boiling_point": 239.05,
+      "base_toxicity": 5.406,
+      "medicinal_expected": 0.006,
+      "medicinal_efficacy": 0.1515,
+      "price_per_gram": 8.9391,
+      "heat_capacity_J_per_gK": 1.8577,
+      "latent_heat_fusion_J_per_g": 52.19,
+      "latent_heat_vaporization_J_per_g": 424.67,
+      "clausius_C": 77.7,
+      "is_solvent": false,
+      "solubility": {
+        "C004": 32.28
+      }
+    },
+    "C015": {
+      "id": "C015",
+      "name": "Exkaven",
+      "layer": 3,
+      "molecular_weight": 222.93,
+      "melting_point": -34.11,
+      "boiling_point": 191.08,
+      "base_toxicity": 4.781,
+      "medicinal_expected": 3.358,
+      "medicinal_efficacy": 0.1724,
+      "price_per_gram": null,
+      "heat_capacity_J_per_gK": 2.4987,
+      "latent_heat_fusion_J_per_g": 38.08,
+      "latent_heat_vaporization_J_per_g": 774.93,
+      "clausius_C": 44.17,
+      "is_solvent": false,
+      "solubility": {
+        "C003": 5.48,
+        "C004": 5.09
+      }
+    },
+    "C016": {
+      "id": "C016",
+      "name": "Gwernolvorn",
+      "layer": 3,
+      "molecular_weight": 248.06,
+      "melting_point": 25.09,
+      "boiling_point": 296.51,
+      "base_toxicity": 5.07,
+      "medicinal_expected": 2.036,
+      "medicinal_efficacy": 0.0002,
+      "price_per_gram": null,
+      "heat_capacity_J_per_gK": 2.1257,
+      "latent_heat_fusion_J_per_g": 57.66,
+      "latent_heat_vaporization_J_per_g": 155.93,
+      "clausius_C": 70.18,
+      "is_solvent": false,
+      "solubility": {
+        "C004": 44.14,
+        "C001": 4.89,
+        "C003": 5.67,
+        "C002": 4.42
+      }
+    },
+    "C017": {
+      "id": "C017",
+      "name": "Rethirxulfon",
+      "layer": 2,
+      "molecular_weight": 134.92,
+      "melting_point": 40.0,
+      "boiling_point": 540.53,
+      "base_toxicity": 5.376,
+      "medicinal_expected": 2.653,
+      "medicinal_efficacy": 0.0001,
+      "price_per_gram": null,
+      "heat_capacity_J_per_gK": 1.2757,
+      "latent_heat_fusion_J_per_g": 80.85,
+      "latent_heat_vaporization_J_per_g": 197.67,
+      "clausius_C": 30.38,
+      "is_solvent": false,
+      "solubility": {
+        "C003": 40.82,
+        "C004": 4.24,
+        "C001": 8.14
+      }
+    },
+    "C018": {
+      "id": "C018",
+      "name": "Melvenax",
+      "layer": 2,
+      "molecular_weight": 366.01,
+      "melting_point": 40.0,
+      "boiling_point": 168.93,
+      "base_toxicity": 1.365,
+      "medicinal_expected": 3.544,
+      "medicinal_efficacy": 0.084,
+      "price_per_gram": null,
+      "heat_capacity_J_per_gK": 0.9506,
+      "latent_heat_fusion_J_per_g": 85.01,
+      "latent_heat_vaporization_J_per_g": 342.46,
+      "clausius_C": 65.08,
+      "is_solvent": false,
+      "solubility": {
+        "C001": 6.51,
+        "C002": 6.17,
+        "C004": 2.6
+      }
+    },
+    "C019": {
+      "id": "C019",
+      "name": "Gwilvornex",
+      "layer": 2,
+      "molecular_weight": 40.01,
+      "melting_point": 40.69,
+      "boiling_point": 258.74,
+      "base_toxicity": 8.612,
+      "medicinal_expected": 0.406,
+      "medicinal_efficacy": 0.0534,
+      "price_per_gram": null,
+      "heat_capacity_J_per_gK": 0.9938,
+      "latent_heat_fusion_J_per_g": 32.81,
+      "latent_heat_vaporization_J_per_g": 523.65,
+      "clausius_C": 59.44,
+      "is_solvent": false,
+      "solubility": {
+        "C004": 3.33
+      }
+    },
+    "C020": {
+      "id": "C020",
+      "name": "Trixivalven",
+      "layer": 2,
+      "molecular_weight": 164.31,
+      "melting_point": -47.7,
+      "boiling_point": 88.14,
+      "base_toxicity": 4.604,
+      "medicinal_expected": 1.638,
+      "medicinal_efficacy": 0.0555,
+      "price_per_gram": null,
+      "heat_capacity_J_per_gK": 1.7611,
+      "latent_heat_fusion_J_per_g": 98.57,
+      "latent_heat_vaporization_J_per_g": 682.7,
+      "clausius_C": 66.25,
+      "is_solvent": false,
+      "solubility": {
+        "C003": 5.86,
+        "C004": 5.83,
+        "C002": 16.73
+      }
+    },
+    "C021": {
+      "id": "C021",
+      "name": "Klorvirven4",
+      "layer": 2,
+      "molecular_weight": 128.07,
+      "melting_point": 236.64,
+      "boiling_point": 464.43,
+      "base_toxicity": 9.027,
+      "medicinal_expected": 2.143,
+      "medicinal_efficacy": 0.0056,
+      "price_per_gram": null,
+      "heat_capacity_J_per_gK": 2.9906,
+      "latent_heat_fusion_J_per_g": 127.45,
+      "latent_heat_vaporization_J_per_g": 663.07,
+      "clausius_C": 69.4,
+      "is_solvent": false,
+      "solubility": {
+        "C001": 6.72,
+        "C002": 7.12,
+        "C003": 7.02
+      }
+    },
+    "C022": {
+      "id": "C022",
+      "name": "Drexax",
+      "layer": 3,
+      "molecular_weight": 96.58,
+      "melting_point": 37.91,
+      "boiling_point": 303.54,
+      "base_toxicity": 8.41,
+      "medicinal_expected": 3.991,
+      "medicinal_efficacy": 0.2834,
+      "price_per_gram": null,
+      "heat_capacity_J_per_gK": 2.3645,
+      "latent_heat_fusion_J_per_g": 42.74,
+      "latent_heat_vaporization_J_per_g": 529.83,
+      "clausius_C": 47.22,
+      "is_solvent": false,
+      "solubility": {
+        "C004": 22.45,
+        "C003": 11.49,
+        "C002": 18.02
+      }
+    },
+    "C023": {
+      "id": "C023",
+      "name": "Snelvelfavorn",
+      "layer": 3,
+      "molecular_weight": 31.38,
+      "melting_point": 72.01,
+      "boiling_point": 170.49,
+      "base_toxicity": 4.128,
+      "medicinal_expected": 4.93,
+      "medicinal_efficacy": 0.0142,
+      "price_per_gram": null,
+      "heat_capacity_J_per_gK": 0.9119,
+      "latent_heat_fusion_J_per_g": 33.37,
+      "latent_heat_vaporization_J_per_g": 247.58,
+      "clausius_C": 76.77,
+      "is_solvent": false,
+      "solubility": {
+        "C002": 16.94,
+        "C001": 3.32,
+        "C004": 10.29
+      }
+    },
+    "C024": {
+      "id": "C024",
+      "name": "Melviveth",
+      "layer": 3,
+      "molecular_weight": 209.96,
+      "melting_point": -32.72,
+      "boiling_point": 45.88,
+      "base_toxicity": 3.346,
+      "medicinal_expected": 2.719,
+      "medicinal_efficacy": 0.0342,
+      "price_per_gram": null,
+      "heat_capacity_J_per_gK": 1.016,
+      "latent_heat_fusion_J_per_g": 44.44,
+      "latent_heat_vaporization_J_per_g": 718.41,
+      "clausius_C": 56.08,
+      "is_solvent": false,
+      "solubility": {
+        "C002": 5.31,
+        "C003": 14.62
+      }
+    },
+    "C025": {
+      "id": "C025",
+      "name": "Vrethirvon9",
+      "layer": 4,
+      "molecular_weight": 203.84,
+      "melting_point": -9.31,
+      "boiling_point": 133.86,
+      "base_toxicity": 1.407,
+      "medicinal_expected": 6.812,
+      "medicinal_efficacy": 0.0183,
+      "price_per_gram": null,
+      "heat_capacity_J_per_gK": 3.8305,
+      "latent_heat_fusion_J_per_g": 224.0,
+      "latent_heat_vaporization_J_per_g": 648.67,
+      "clausius_C": 66.66,
+      "is_solvent": false,
+      "solubility": {
+        "C002": 7.12,
+        "C004": 5.1
+      }
+    },
+    "C026": {
+      "id": "C026",
+      "name": "Kluxornex",
+      "layer": 4,
+      "molecular_weight": 179.96,
+      "melting_point": 87.3,
+      "boiling_point": 189.94,
+      "base_toxicity": 0.644,
+      "medicinal_expected": 6.474,
+      "medicinal_efficacy": 0.0079,
+      "price_per_gram": null,
+      "heat_capacity_J_per_gK": 3.3524,
+      "latent_heat_fusion_J_per_g": 109.42,
+      "latent_heat_vaporization_J_per_g": 174.02,
+      "clausius_C": 68.73,
+      "is_solvent": false,
+      "solubility": {
+        "C001": 33.57
+      }
+    }
+  },
+  "reactions": {
+    "R001": {
+      "id": "R001",
+      "reactants": [
+        [
+          "C016",
+          1
+        ],
+        [
+          "C014",
+          1
+        ],
+        [
+          "C007",
+          1
+        ],
+        [
+          "C004",
+          1
+        ]
+      ],
+      "catalysts": [],
+      "products": [
+        [
+          "C005",
+          1
+        ]
+      ],
+      "byproducts": [
+        [
+          "C002",
+          1
+        ]
+      ],
+      "delta_G_kJ": -114.152,
+      "delta_H_kJ": -112.701,
+      "activation_energy_kJ": 105.075,
+      "log_A_factor": 10.429
+    },
+    "R002": {
+      "id": "R002",
+      "reactants": [
+        [
+          "C017",
+          1
+        ],
+        [
+          "C006",
+          1
+        ],
+        [
+          "C012",
+          1
+        ],
+        [
+          "C003",
+          1
+        ]
+      ],
+      "catalysts": [],
+      "products": [
+        [
+          "C016",
+          2
+        ]
+      ],
+      "byproducts": [
+        [
+          "C008",
+          1
+        ]
+      ],
+      "delta_G_kJ": -97.391,
+      "delta_H_kJ": -89.527,
+      "activation_energy_kJ": 87.744,
+      "log_A_factor": 10.427
+    },
+    "R003": {
+      "id": "R003",
+      "reactants": [
+        [
+          "C008",
+          1
+        ],
+        [
+          "C011",
+          1
+        ],
+        [
+          "C004",
+          1
+        ]
+      ],
+      "catalysts": [],
+      "products": [
+        [
+          "C017",
+          2
+        ]
+      ],
+      "byproducts": [],
+      "delta_G_kJ": -51.265,
+      "delta_H_kJ": -16.518,
+      "activation_energy_kJ": 116.255,
+      "log_A_factor": 12.4296
+    },
+    "R004": {
+      "id": "R004",
+      "reactants": [
+        [
+          "C012",
+          2
+        ],
+        [
+          "C003",
+          2
+        ]
+      ],
+      "catalysts": [],
+      "products": [
+        [
+          "C018",
+          1
+        ]
+      ],
+      "byproducts": [],
+      "delta_G_kJ": -23.682,
+      "delta_H_kJ": 12.419,
+      "activation_energy_kJ": 113.857,
+      "log_A_factor": 13.1981
+    },
+    "R005": {
+      "id": "R005",
+      "reactants": [
+        [
+          "C008",
+          2
+        ],
+        [
+          "C011",
+          2
+        ],
+        [
+          "C010",
+          1
+        ]
+      ],
+      "catalysts": [],
+      "products": [
+        [
+          "C019",
+          1
+        ]
+      ],
+      "byproducts": [],
+      "delta_G_kJ": 7.055,
+      "delta_H_kJ": 73.107,
+      "activation_energy_kJ": 92.721,
+      "log_A_factor": 8.2389
+    },
+    "R006": {
+      "id": "R006",
+      "reactants": [
+        [
+          "C011",
+          2
+        ],
+        [
+          "C006",
+          2
+        ],
+        [
+          "C003",
+          2
+        ]
+      ],
+      "catalysts": [],
+      "products": [
+        [
+          "C020",
+          1
+        ]
+      ],
+      "byproducts": [],
+      "delta_G_kJ": -18.388,
+      "delta_H_kJ": -142.176,
+      "activation_energy_kJ": 300.0,
+      "log_A_factor": 10.1533
+    },
+    "R007": {
+      "id": "R007",
+      "reactants": [
+        [
+          "C006",
+          1
+        ],
+        [
+          "C010",
+          2
+        ],
+        [
+          "C004",
+          1
+        ]
+      ],
+      "catalysts": [],
+      "products": [
+        [
+          "C021",
+          1
+        ]
+      ],
+      "byproducts": [],
+      "delta_G_kJ": 2.112,
+      "delta_H_kJ": -58.161,
+      "activation_energy_kJ": 60.0,
+      "log_A_factor": 10.5084
+    },
+    "R008": {
+      "id": "R008",
+      "reactants": [
+        [
+          "C019",
+          1
+        ],
+        [
+          "C012",
+          1
+        ],
+        [
+          "C014",
+          2
+        ]
+      ],
+      "catalysts": [],
+      "products": [
+        [
+          "C015",
+          1
+        ]
+      ],
+      "byproducts": [],
+      "delta_G_kJ": -22.513,
+      "delta_H_kJ": -19.176,
+      "activation_energy_kJ": 214.213,
+      "log_A_factor": 11.6137
+    },
+    "R009": {
+      "id": "R009",
+      "reactants": [
+        [
+          "C021",
+          1
+        ],
+        [
+          "C011",
+          1
+        ]
+      ],
+      "catalysts": [],
+      "products": [
+        [
+          "C022",
+          1
+        ]
+      ],
+      "byproducts": [],
+      "delta_G_kJ": -36.518,
+      "delta_H_kJ": 88.429,
+      "activation_energy_kJ": 134.872,
+      "log_A_factor": 5.7246
+    },
+    "R010": {
+      "id": "R010",
+      "reactants": [
+        [
+          "C020",
+          1
+        ],
+        [
+          "C001",
+          2
+        ]
+      ],
+      "catalysts": [],
+      "products": [
+        [
+          "C023",
+          1
+        ]
+      ],
+      "byproducts": [],
+      "delta_G_kJ": -31.365,
+      "delta_H_kJ": 72.249,
+      "activation_energy_kJ": 153.215,
+      "log_A_factor": 10.8973
+    },
+    "R011": {
+      "id": "R011",
+      "reactants": [
+        [
+          "C019",
+          2
+        ],
+        [
+          "C001",
+          1
+        ]
+      ],
+      "catalysts": [],
+      "products": [
+        [
+          "C024",
+          1
+        ]
+      ],
+      "byproducts": [],
+      "delta_G_kJ": -2.171,
+      "delta_H_kJ": 0.37,
+      "activation_energy_kJ": 195.491,
+      "log_A_factor": 13.8514
+    },
+    "R012": {
+      "id": "R012",
+      "reactants": [
+        [
+          "C016",
+          1
+        ],
+        [
+          "C020",
+          2
+        ],
+        [
+          "C006",
+          1
+        ]
+      ],
+      "catalysts": [],
+      "products": [
+        [
+          "C025",
+          1
+        ]
+      ],
+      "byproducts": [],
+      "delta_G_kJ": -34.82,
+      "delta_H_kJ": -132.714,
+      "activation_energy_kJ": 268.662,
+      "log_A_factor": 12.1484
+    },
+    "R013": {
+      "id": "R013",
+      "reactants": [
+        [
+          "C023",
+          1
+        ],
+        [
+          "C015",
+          2
+        ],
+        [
+          "C006",
+          2
+        ]
+      ],
+      "catalysts": [],
+      "products": [
+        [
+          "C026",
+          1
+        ]
+      ],
+      "byproducts": [],
+      "delta_G_kJ": 20.493,
+      "delta_H_kJ": -19.533,
+      "activation_energy_kJ": 95.955,
+      "log_A_factor": 10.5709
+    },
+    "R014": {
+      "id": "R014",
+      "reactants": [
+        [
+          "C001",
+          1
+        ],
+        [
+          "C012",
+          1
+        ],
+        [
+          "C004",
+          1
+        ]
+      ],
+      "catalysts": [],
+      "products": [
+        [
+          "C019",
+          1
+        ],
+        [
+          "C020",
+          2
+        ]
+      ],
+      "byproducts": [],
+      "delta_G_kJ": -49.846,
+      "delta_H_kJ": -66.517,
+      "activation_energy_kJ": 132.808,
+      "log_A_factor": 7.6656
+    },
+    "R015": {
+      "id": "R015",
+      "reactants": [
+        [
+          "C006",
+          3
+        ],
+        [
+          "C010",
+          1
+        ],
+        [
+          "C013",
+          1
+        ]
+      ],
+      "catalysts": [],
+      "products": [
+        [
+          "C018",
+          2
+        ]
+      ],
+      "byproducts": [],
+      "delta_G_kJ": -16.664,
+      "delta_H_kJ": -41.541,
+      "activation_energy_kJ": 142.874,
+      "log_A_factor": 6.32
+    },
+    "R016": {
+      "id": "R016",
+      "reactants": [
+        [
+          "C003",
+          3
+        ],
+        [
+          "C010",
+          2
+        ],
+        [
+          "C014",
+          2
+        ]
+      ],
+      "catalysts": [],
+      "products": [
+        [
+          "C020",
+          2
+        ]
+      ],
+      "byproducts": [],
+      "delta_G_kJ": -24.206,
+      "delta_H_kJ": -41.15,
+      "activation_energy_kJ": 276.003,
+      "log_A_factor": 8.4613
+    },
+    "R017": {
+      "id": "R017",
+      "reactants": [
+        [
+          "C006",
+          1
+        ],
+        [
+          "C007",
+          3
+        ],
+        [
+          "C012",
+          2
+        ]
+      ],
+      "catalysts": [],
+      "products": [
+        [
+          "C019",
+          1
+        ],
+        [
+          "C020",
+          1
+        ]
+      ],
+      "byproducts": [],
+      "delta_G_kJ": 17.074,
+      "delta_H_kJ": -43.127,
+      "activation_energy_kJ": 74.781,
+      "log_A_factor": 8.7078
+    },
+    "R018": {
+      "id": "R018",
+      "reactants": [
+        [
+          "C001",
+          3
+        ],
+        [
+          "C012",
+          3
+        ],
+        [
+          "C004",
+          3
+        ],
+        [
+          "C008",
+          2
+        ]
+      ],
+      "catalysts": [],
+      "products": [
+        [
+          "C017",
+          2
+        ],
+        [
+          "C018",
+          2
+        ]
+      ],
+      "byproducts": [],
+      "delta_G_kJ": 25.646,
+      "delta_H_kJ": 25.981,
+      "activation_energy_kJ": 224.099,
+      "log_A_factor": 11.2353
+    },
+    "R019": {
+      "id": "R019",
+      "reactants": [
+        [
+          "C003",
+          1
+        ],
+        [
+          "C012",
+          3
+        ]
+      ],
+      "catalysts": [],
+      "products": [
+        [
+          "C018",
+          1
+        ],
+        [
+          "C019",
+          2
+        ]
+      ],
+      "byproducts": [],
+      "delta_G_kJ": 20.382,
+      "delta_H_kJ": 25.982,
+      "activation_energy_kJ": 300.0,
+      "log_A_factor": 7.1611
+    },
+    "R020": {
+      "id": "R020",
+      "reactants": [
+        [
+          "C019",
+          3
+        ],
+        [
+          "C014",
+          2
+        ]
+      ],
+      "catalysts": [],
+      "products": [
+        [
+          "C015",
+          1
+        ],
+        [
+          "C024",
+          1
+        ]
+      ],
+      "byproducts": [],
+      "delta_G_kJ": 5.814,
+      "delta_H_kJ": -46.978,
+      "activation_energy_kJ": 150.098,
+      "log_A_factor": 9.6292
+    },
+    "R021": {
+      "id": "R021",
+      "reactants": [
+        [
+          "C019",
+          3
+        ],
+        [
+          "C006",
+          2
+        ]
+      ],
+      "catalysts": [],
+      "products": [
+        [
+          "C022",
+          1
+        ],
+        [
+          "C015",
+          1
+        ]
+      ],
+      "byproducts": [],
+      "delta_G_kJ": -25.484,
+      "delta_H_kJ": 13.914,
+      "activation_energy_kJ": 219.092,
+      "log_A_factor": 10.8215
+    },
+    "R022": {
+      "id": "R022",
+      "reactants": [
+        [
+          "C019",
+          2
+        ],
+        [
+          "C018",
+          1
+        ]
+      ],
+      "catalysts": [],
+      "products": [
+        [
+          "C016",
+          1
+        ],
+        [
+          "C023",
+          1
+        ]
+      ],
+      "byproducts": [],
+      "delta_G_kJ": 1.477,
+      "delta_H_kJ": -92.768,
+      "activation_energy_kJ": 187.206,
+      "log_A_factor": 10.9379
+    },
+    "R023": {
+      "id": "R023",
+      "reactants": [
+        [
+          "C017",
+          2
+        ],
+        [
+          "C009",
+          2
+        ]
+      ],
+      "catalysts": [],
+      "products": [
+        [
+          "C016",
+          1
+        ],
+        [
+          "C022",
+          2
+        ]
+      ],
+      "byproducts": [
+        [
+          "C002",
+          1
+        ]
+      ],
+      "delta_G_kJ": -33.379,
+      "delta_H_kJ": 4.868,
+      "activation_energy_kJ": 300.0,
+      "log_A_factor": 10.3798
+    },
+    "R024": {
+      "id": "R024",
+      "reactants": [
+        [
+          "C017",
+          2
+        ],
+        [
+          "C009",
+          1
+        ],
+        [
+          "C021",
+          3
+        ]
+      ],
+      "catalysts": [],
+      "products": [
+        [
+          "C016",
+          1
+        ],
+        [
+          "C023",
+          2
+        ]
+      ],
+      "byproducts": [],
+      "delta_G_kJ": -46.14,
+      "delta_H_kJ": -100.194,
+      "activation_energy_kJ": 300.0,
+      "log_A_factor": 10.7301
+    },
+    "R025": {
+      "id": "R025",
+      "reactants": [
+        [
+          "C021",
+          2
+        ],
+        [
+          "C011",
+          1
+        ],
+        [
+          "C013",
+          3
+        ],
+        [
+          "C012",
+          1
+        ]
+      ],
+      "catalysts": [
+        "C009"
+      ],
+      "products": [
+        [
+          "C016",
+          2
+        ],
+        [
+          "C024",
+          2
+        ]
+      ],
+      "byproducts": [
+        [
+          "C018",
+          1
+        ]
+      ],
+      "delta_G_kJ": 23.793,
+      "delta_H_kJ": 89.584,
+      "activation_energy_kJ": 262.104,
+      "log_A_factor": 10.4688
+    },
+    "R026": {
+      "id": "R026",
+      "reactants": [
+        [
+          "C024",
+          3
+        ],
+        [
+          "C021",
+          3
+        ],
+        [
+          "C001",
+          2
+        ],
+        [
+          "C004",
+          2
+        ]
+      ],
+      "catalysts": [],
+      "products": [
+        [
+          "C005",
+          2
+        ],
+        [
+          "C025",
+          1
+        ]
+      ],
+      "byproducts": [],
+      "delta_G_kJ": 3.391,
+      "delta_H_kJ": 24.011,
+      "activation_energy_kJ": 66.074,
+      "log_A_factor": 6.8856
+    },
+    "R027": {
+      "id": "R027",
+      "reactants": [
+        [
+          "C015",
+          1
+        ],
+        [
+          "C022",
+          2
+        ]
+      ],
+      "catalysts": [],
+      "products": [
+        [
+          "C026",
+          1
+        ],
+        [
+          "C025",
+          2
+        ]
+      ],
+      "byproducts": [],
+      "delta_G_kJ": 8.66,
+      "delta_H_kJ": -6.505,
+      "activation_energy_kJ": 277.33,
+      "log_A_factor": 14.441
+    },
+    "R028": {
+      "id": "R028",
+      "reactants": [
+        [
+          "C022",
+          2
+        ],
+        [
+          "C002",
+          2
+        ],
+        [
+          "C023",
+          2
+        ]
+      ],
+      "catalysts": [],
+      "products": [
+        [
+          "C025",
+          2
+        ],
+        [
+          "C026",
+          1
+        ]
+      ],
+      "byproducts": [],
+      "delta_G_kJ": -39.947,
+      "delta_H_kJ": -90.414,
+      "activation_energy_kJ": 162.411,
+      "log_A_factor": 11.1846
+    },
+    "R029": {
+      "id": "R029",
+      "reactants": [
+        [
+          "C022",
+          2
+        ],
+        [
+          "C024",
+          3
+        ]
+      ],
+      "catalysts": [],
+      "products": [
+        [
+          "C005",
+          2
+        ]
+      ],
+      "byproducts": [],
+      "delta_G_kJ": -15.42,
+      "delta_H_kJ": -78.985,
+      "activation_energy_kJ": 300.0,
+      "log_A_factor": 10.9087
+    },
+    "R030": {
+      "id": "R030",
+      "reactants": [
+        [
+          "C024",
+          3
+        ],
+        [
+          "C015",
+          2
+        ]
+      ],
+      "catalysts": [],
+      "products": [
+        [
+          "C025",
+          2
+        ]
+      ],
+      "byproducts": [],
+      "delta_G_kJ": 15.67,
+      "delta_H_kJ": 43.598,
+      "activation_energy_kJ": 153.031,
+      "log_A_factor": 11.5413
+    }
+  },
+  "cost_params": {
+    "heating_coeff": 0.8446,
+    "cooling_coeff": 1.2456,
+    "heating_exponent": 1.4431,
+    "cooling_exponent": 1.2078,
+    "pressure_high_coeff": 2.2706,
+    "pressure_low_coeff": 1.2825,
+    "pressure_high_exp": 0.9868,
+    "pressure_low_exp": 0.7351,
+    "equipment_base": 7.3462,
+    "equipment_pressure_coeff": 0.288,
+    "duration_coeff": 0.0863
+  },
+  "equipment": {
+    "open_beaker": {
+      "description": "Open beaker at atmospheric pressure, exchanges heat with environment",
+      "vessel_type": "open",
+      "thermal_mode": "open_air",
+      "max_pressure_atm": 0.8,
+      "max_temp_C": 317.0,
+      "min_temp_C": -20.0,
+      "max_capacity_g": 391.0,
+      "base_cost_per_hour": 2.67,
+      "cost_multiplier": 1.36,
+      "heat_transfer_coeff": 0.05
+    },
+    "reflux_condenser": {
+      "description": "Round-bottom flask with reflux condenser, moderate insulation, constant pressure",
+      "vessel_type": "open",
+      "thermal_mode": "open_air",
+      "max_pressure_atm": 1.7,
+      "max_temp_C": 456.0,
+      "min_temp_C": -22.0,
+      "max_capacity_g": 1113.0,
+      "base_cost_per_hour": 5.1,
+      "cost_multiplier": 1.09,
+      "heat_transfer_coeff": 0.02
+    },
+    "sealed_flask": {
+      "description": "Sealed flask, constant volume, partially insulated",
+      "vessel_type": "sealed",
+      "thermal_mode": "adiabatic",
+      "max_pressure_atm": 6.8,
+      "max_temp_C": 440.0,
+      "min_temp_C": -39.0,
+      "max_capacity_g": 643.0,
+      "base_cost_per_hour": 12.06,
+      "cost_multiplier": 2.39
+    },
+    "autoclave": {
+      "description": "High-pressure sealed reactor, temperature-controlled",
+      "vessel_type": "sealed",
+      "thermal_mode": "isothermal",
+      "max_pressure_atm": 42.4,
+      "max_temp_C": 532.0,
+      "min_temp_C": -52.0,
+      "max_capacity_g": 2748.0,
+      "base_cost_per_hour": 31.03,
+      "cost_multiplier": 4.66,
+      "max_heat_rate_W": 500.0
+    },
+    "insulated_reactor": {
+      "description": "Well-insulated sealed reactor, adiabatic conditions",
+      "vessel_type": "sealed",
+      "thermal_mode": "adiabatic",
+      "max_pressure_atm": 24.3,
+      "max_temp_C": 946.0,
+      "min_temp_C": -73.0,
+      "max_capacity_g": 1459.0,
+      "base_cost_per_hour": 14.28,
+      "cost_multiplier": 4.08
+    },
+    "heated_reactor": {
+      "description": "Sealed reactor with continuous heating element",
+      "vessel_type": "sealed",
+      "thermal_mode": "heating",
+      "max_pressure_atm": 28.0,
+      "max_temp_C": 876.0,
+      "min_temp_C": -22.0,
+      "max_capacity_g": 1424.0,
+      "base_cost_per_hour": 26.79,
+      "cost_multiplier": 5.82
+    },
+    "cooled_reactor": {
+      "description": "Sealed reactor with active cooling system",
+      "vessel_type": "sealed",
+      "thermal_mode": "cooling",
+      "max_pressure_atm": 27.1,
+      "max_temp_C": 422.0,
+      "min_temp_C": -188.0,
+      "max_capacity_g": 2143.0,
+      "base_cost_per_hour": 40.69,
+      "cost_multiplier": 4.73
+    }
+  }
+}
