@@ -1,0 +1,58 @@
+将 AnyMDP / MazeWorld 数据转为 VLM 可用数据的方案
+0. 关键前提与定位
+- MazeWorld = 视觉主力：第一人称 RGB 观测天然适配 VLM 的图像通道，四种形态都由它承载。
+- AnyMDP = 纯文本序列：无图像，按你的选择序列化为文本 token。它进入的是 VLM 训练混合数据里的纯文本轮次（decoder 仍是同一个语言主干，可提升符号推理/决策能力），VQA/Caption 不适用于它，仅承载"多轮交互"和"决策序列"两种形态的文本版。
+1. 统一目标 Schema
+建议所有样本落到一个统一 JSONL + 图像目录结构，兼容主流 VLM 训练格式（如 LLaVA/Qwen-VL messages 风格）：
+messages: [
+  {role, content:[{type:"image", path}|{type:"text", text}]}
+]
+meta: {source: "mazeworld"|"anymdp", task_type, seed, teacher, split, diversity_tags:{...}}
+- 图像单独存 images/<sample_id>/*.png，JSONL 里存相对路径。
+- meta.diversity_tags 记录采样参数，供后续做分层去重/配比（多样性保障的关键，见 §5）。
+2. MazeWorld → 四种形态
+数据源（现有 API）：env.step() 的 RGB 观测、info["command"]（目标地标 RGB）、get_local_map()、get_global_map()、目标距离/角度；教师策略 OracleAgent / SmartSLAMAgent。
+形态	输入图像	文本构造
+VQA	单帧第一人称 RGB（可选拼上 local/global map）	从模板库随机抽问：目标颜色？该往哪走？前方是墙吗？离目标远近？
+Caption	第一人称帧 或 global-map	"描述当前视野/迷宫布局/我与目标的相对位置"
+具身决策序列(VLA)	轨迹中每步 RGB	系统指令(目标地标颜色) + 逐步"观测图→动作"
+多轮交互	交错的每步观测图	in-context 多轮：用户给图、助手给动作+简短理由
+要点：
+- 动作离散化：优先用 mazeworld-v2 的 Discrete16/32，把动作映射成自然语言词（"左转/前进/右转"），VLM 更易学。
+- 理由(rationale)自动生成：用 get_global_map() + 目标角度，模板化生成"因为目标在右前方，所以右转"，为决策/多轮数据加 CoT，提升质量。
+- god-view 只在训练标注用，测试时只喂第一人称，避免信息泄漏。
+3. AnyMDP → 纯文本（决策序列 + 多轮）
+数据源：AnyMDPSolverOpt（最优）、anymdp_solver_q（Q-learning 次优/学习曲线）、anymdp_solver_mbrl（探索性）。
+- 序列化格式：把 (s_t, a_t, r_t, s_{t+1}) 编码为紧凑文本，例如
+  S12 -A3-> S7 R:+1.0，多步拼成一条轨迹。
+- 决策序列形态：给定历史 transition 文本 + 当前状态，让模型预测下一动作（in-context RL / decision-transformer 风格）。用 Opt 给最优标签。
+- 多轮交互形态：多轮对话里逐步"喂观测、给动作"，模拟在线交互；混入 Q/MBRL 的次优轨迹让模型见到探索与纠错。
+- 任务描述头：每条样本前加自然语言任务说明（状态数、动作数、目标/陷阱语义），增强语言对齐。
+- 明确标注 meta.source="anymdp" 且无 image 字段——作为 VLM 混合训练中的纯文本轮次。
+4. 生成管线（模块落点，遵循 repo 约定）
+建议新增独立子包，不侵入环境代码：
+xenoverse/data_export/
+  __init__.py
+  schema.py            # 统一样本 dataclass + JSONL writer
+  mazeworld_exporter.py# rollout + 教师 + 自动标注 + 4 种形态 builder
+  anymdp_exporter.py   # 三求解器 + 文本序列化 + 2 种形态 builder
+  templates/           # VQA/Caption/rationale 提示词模板库
+  diversity.py         # 采样配比、分层去重、覆盖度统计
+  tests/test.py        # 小规模冒烟：能跑通导出 + schema 校验
+沿用现有 MazeTaskSampler/Resampler、AnyMDPTaskSampler/GarnetTaskSampler 做任务随机化，导出器只负责 rollout + 组装。
+5. 多样性保障（核心）
+分四个层级，每层都写进 diversity_tags 并在 diversity.py 做配额与去重：
+1. 任务级：
+   - MazeWorld：随机 topology、纹理、目标、command 序列、物理尺度、迷宫大小；
+   - AnyMDP：随机 ns/na、transition/reward，混用 AnyMDP 与 Garnet 采样器，覆盖 MDP/POMDP/MTPOMDP。
+2. 策略级：混合最优/次优/探索/随机策略产轨迹，保证既有"标准答案"又有"失败与纠错"样本，避免行为分布单一。
+3. 形态/提问级：模板库对每类问题准备多措辞变体 + 随机组合，防止 prompt 过拟合；对答案分布（动作类别、颜色、远近）做均衡采样。
+4. 去重与覆盖：
+   - 图像近重复检测（感知哈希）过滤冗余帧；
+   - 对 diversity_tags 组合做覆盖度统计，欠采样的组合优先补采（配额采样）；
+   - 划分 train/val/test 时按 task-seed 切分，确保测试任务在训练中未出现（真多样性/泛化）。
+6. 建议的执行顺序（实现阶段）
+1. schema.py + tests 冒烟先行，定死数据契约。
+2. MazeWorld VQA（最易自动标注）→ Caption → 决策序列 → 多轮。
+3. AnyMDP 决策序列 → 多轮。
+4. diversity.py 做配比/去重/覆盖统计，最后统一打包与切分。
