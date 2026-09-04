@@ -199,6 +199,9 @@ Task sampler:
 
 - `sample_humanoid(root_path=None, noise_scale=1.0)`
 
+`noise_scale` must be in `[0, 1]`. A value of `0` produces the neutral
+Gymnasium-like model, while `1` enables the full safe randomization range.
+
 What it returns:
 
 - a filesystem path to a generated MuJoCo XML file
@@ -211,6 +214,12 @@ What is randomized:
 - actuator gear values
 - morphology-related contact properties
 
+The full randomization range is intentionally bounded: limb lengths vary by
+up to 12%, radii by up to 8%, joint dynamics and actuator strength by up to
+20%, and joint-limit endpoints by up to 10%. Floor friction stays in
+`[0.7, 1.3]`. Left/right limb dynamics are paired so a sampled task does not
+introduce a permanent turning bias.
+
 Environment:
 
 - `RandomHumanoidEnv`
@@ -219,7 +228,9 @@ Notable behavior:
 
 - extends Gymnasium `HumanoidEnv`
 - `set_task(task)` reloads the model from the sampled XML file
-- healthy height range is adjusted from the sampled torso geometry
+- healthy height range is adjusted to 70%-140% of the sampled standing height
+- all sampled models preserve the standard 348-dimensional observation space
+  and 17-dimensional action space
 
 Practical note:
 
@@ -299,5 +310,15 @@ Use:
 There is a basic humanoid smoke test at:
 
 - [tests/test.py](/C:/Users/fanan/codes/Xenoverse/xenoverse/metacontrol/tests/test.py)
+
+To open a MuJoCo window and inspect a sampled morphology visually, run:
+
+```bash
+python -m xenoverse.metacontrol.tests.visual_test
+```
+
+The visual test accepts `--steps`, `--noise-scale`, `--action-scale`, and
+`--seed`. It automatically resets the same sampled humanoid after a fall and
+deletes the temporary XML when it exits.
 
 At the moment, the included test focuses on humanoid rollout rather than exhaustive validation of all three families.

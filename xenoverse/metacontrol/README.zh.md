@@ -199,6 +199,9 @@ while not (terminated or truncated):
 
 - `sample_humanoid(root_path=None, noise_scale=1.0)`
 
+`noise_scale` 必须位于 `[0, 1]`。取 `0` 时生成接近 Gymnasium 官方
+Humanoid 的中性模型，取 `1` 时启用完整的安全随机范围。
+
 它返回的内容是：
 
 - 一个生成好的 MuJoCo XML 文件路径
@@ -211,6 +214,11 @@ while not (terminated or truncated):
 - actuator gear 值
 - 与身体形态相关的接触属性
 
+完整随机范围经过了有意收敛：肢体长度最多变化 12%，半径最多变化 8%，
+关节动力学和 actuator 强度最多变化 20%，关节限位端点最多变化 10%；地面
+摩擦系数保持在 `[0.7, 1.3]`。左右肢体的动力学参数成对采样，避免随机任务
+天然带有持续转向偏置。
+
 环境类：
 
 - `RandomHumanoidEnv`
@@ -219,7 +227,8 @@ while not (terminated or truncated):
 
 - 继承自 Gymnasium `HumanoidEnv`
 - `set_task(task)` 会基于采样 XML 文件重新加载模型
-- healthy height range 会根据采样到的 torso 几何自动调整
+- healthy height range 会调整为采样站立高度的 70%-140%
+- 所有采样模型均保持标准的 348 维观察空间和 17 维动作空间
 
 实际使用说明：
 
@@ -299,5 +308,14 @@ CartPole 和 Acrobot 都支持两个比较重要的环境构造参数：
 仓库中包含一个基础 humanoid smoke test：
 
 - [tests/test.py](/C:/Users/fanan/codes/Xenoverse/xenoverse/metacontrol/tests/test.py)
+
+如果需要打开 MuJoCo 窗口，直观看到采样后的身体形态，可以运行：
+
+```bash
+python -m xenoverse.metacontrol.tests.visual_test
+```
+
+可视化测试支持 `--steps`、`--noise-scale`、`--action-scale` 和 `--seed`
+参数。Humanoid 跌倒后会自动使用同一个任务 reset，退出时会删除临时 XML。
 
 目前这个测试主要覆盖 humanoid rollout，而不是对三个环境家族做完整验证。
