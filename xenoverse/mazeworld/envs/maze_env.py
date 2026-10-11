@@ -5,8 +5,7 @@ import numpy
 import gymnasium as gym
 import pygame
 
-from gym import error, spaces, utils
-from gym.utils import seeding
+from gymnasium import spaces
 from xenoverse.mazeworld.envs.maze_continuous_3d import MazeCoreContinuous3D
 from xenoverse.mazeworld.envs.dynamics import DEFAULT_ACTION_SPACE_16, DEFAULT_ACTION_SPACE_32
 
@@ -146,7 +145,9 @@ class MazeWorldContinuous3D(MazeWorldEnvBase):
             raise ValueError("Invalid Action Space Type {}. Can only accept Discrete16, Discrete32, Continuous".format(action_space_type))
 
         # observation is the x, y coordinate of the grid
-        self.observation_space = spaces.Box(low=0, high=255, shape=(resolution[0], resolution[1], 3), dtype=numpy.uint8)
+        # The renderer stores pixels as (W, H, C), but the public Gym
+        # observation uses the conventional (H, W, C) layout.
+        self.observation_space = spaces.Box(low=0, high=255, shape=(resolution[1], resolution[0], 3), dtype=numpy.uint8)
 
     def action_control(self, action):
         if(action is None): # Only when there is no action input can we use keyboard control

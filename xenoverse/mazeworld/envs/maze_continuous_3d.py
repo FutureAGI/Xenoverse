@@ -110,7 +110,10 @@ class MazeCoreContinuous3D(MazeBase):
         self._obs_surf = pygame.surfarray.make_surface(self._observation)
 
     def get_observation(self):
-        return numpy.copy(self._observation.astype('uint8'))
+        # ``maze_view`` and pygame surfarrays use (W, H, C), while the
+        # public Gym observation contract is (H, W, C). Keep the internal
+        # layout for rendering and transpose only at this API boundary.
+        return numpy.copy(self._observation.transpose(1, 0, 2).astype('uint8'))
 
     def get_info(self, info):
         info["command"] = self._command_rgb
